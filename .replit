@@ -1,0 +1,31 @@
+modules = ["rust", "go", "python-3.11"]
+[agent]
+expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Payment Gateway"
+
+[[workflows.workflow]]
+name = "Payment Gateway"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/rust/payment-gateway && cargo run"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
