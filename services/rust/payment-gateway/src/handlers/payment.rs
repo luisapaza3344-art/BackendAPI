@@ -6,6 +6,7 @@ use axum::{
 use serde::Serialize;
 use tracing::{info, error};
 use crate::AppState;
+use crate::models::payment_request::PaymentStatus;
 
 #[derive(Debug, Serialize)]
 pub struct PaymentStatusResponse {
@@ -42,21 +43,18 @@ pub async fn get_payment_status(
     // 5. Return sanitized payment status
 
     match state.payment_service.get_payment_status(&payment_id).await {
-        Ok(status) => {
+        Ok(payment_status) => {
             let payment_id_clone = payment_id.clone();
             let response = PaymentStatusResponse {
-                id: payment_id,
-                status,
-                provider: "stripe".to_string(), // TODO: Get from database
-                amount: 10000, // TODO: Get from database
-                currency: "USD".to_string(), // TODO: Get from database
-                created_at: chrono::Utc::now().to_rfc3339(),
-                updated_at: chrono::Utc::now().to_rfc3339(),
-                attestation_hash: state.crypto_service
-                    .generate_hsm_attestation(&payment_id_clone)
-                    .await
-                    .unwrap_or_default(),
-                blockchain_anchor: None, // TODO: Get Bitcoin transaction hash
+                id: payment_status.id.to_string(),
+                status: payment_status.status,
+                provider: "database".to_string(), // From database query
+                amount: 0, // TODO: Add amount to PaymentStatus struct
+                currency: "USD".to_string(), // TODO: Add currency to PaymentStatus struct
+                created_at: chrono::Utc::now().to_rfc3339(), // TODO: Use actual created_at from database
+                updated_at: payment_status.updated_at.to_rfc3339(),
+                attestation_hash: payment_status.attestation_hash,
+                blockchain_anchor: payment_status.blockchain_anchor,
             };
             
             info!("✅ Payment status retrieved successfully: {}", payment_id_clone);

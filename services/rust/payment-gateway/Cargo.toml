@@ -44,8 +44,8 @@ aes-gcm = "0.10"
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
 url = "2.4"
 
-# Database (simplified for initial version)
-# sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
+# Database 
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
 # redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
 # Configuration

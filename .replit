@@ -1,6 +1,7 @@
-modules = ["rust", "go", "python-3.11"]
+modules = ["rust", "go", "python-3.11", "postgresql-16"]
 [agent]
 expertMode = true
+integrations = ["javascript_database:1.0.0"]
 
 [workflows]
 runButton = "Project"
@@ -35,7 +36,7 @@ localPort = 9090
 externalPort = 80
 
 [[ports]]
-localPort = 46443
+localPort = 37431
 externalPort = 3000
 
 [nix]
