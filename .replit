@@ -39,6 +39,10 @@ externalPort = 80
 localPort = 37431
 externalPort = 3000
 
+[[ports]]
+localPort = 45073
+externalPort = 3001
+
 [nix]
 channel = "stable-25_05"
 packages = ["openssl", "pkg-config"]
