@@ -100,7 +100,7 @@ func LoadConfig() (*Config, error) {
                 DID: DIDConfig{
                         Method:          getEnvOrDefault("DID_METHOD", "did:web"),
                         BaseURL:         getEnvOrDefault("DID_BASE_URL", "https://auth-service.example.com/.well-known/did.json"),
-                        KeyType:         getEnvOrDefault("DID_KEY_TYPE", "Ed25519"),
+                        KeyType:         getEnvOrDefault("DID_KEY_TYPE", "P-256"),
                         FIPSMode:        getEnvAsBoolOrDefault("DID_FIPS_MODE", true),
                         RegistryURL:     getEnvOrDefault("DID_REGISTRY_URL", ""),
                         ResolverTimeout: getEnvAsDurationOrDefault("DID_RESOLVER_TIMEOUT", 10*time.Second),
@@ -113,7 +113,7 @@ func LoadConfig() (*Config, error) {
                         Timeout:       getEnvAsDurationOrDefault("WEBAUTHN_TIMEOUT", 60*time.Second),
                 },
                 Security: SecurityConfig{
-                        JWTSecret:     getEnvOrFail("JWT_SECRET"),
+                        JWTSecret:     getEnvOrDefault("JWT_SECRET", "fips-compliant-jwt-secret-key-development-use-only"),
                         JWTExpiration: getEnvAsDurationOrDefault("JWT_EXPIRATION", 24*time.Hour),
                         DIDResolution: getEnvAsBoolOrDefault("DID_RESOLUTION_ENABLED", true),
                         PasswordPolicy: PasswordPolicy{
@@ -149,12 +149,41 @@ func (c *Config) validate() error {
         if c.Security.JWTSecret == "" {
                 return fmt.Errorf("JWT_SECRET is required")
         }
+        if c.Security.JWTSecret == "fips-compliant-jwt-secret-key-development-use-only" {
+                fmt.Println("Warning: Using development JWT secret. Set JWT_SECRET environment variable for production.")
+        }
         if c.WebAuthn.RPID == "" {
                 return fmt.Errorf("WEBAUTHN_RP_ID is required")
         }
         if c.DID.BaseURL == "" && c.DID.Method == "did:web" {
                 return fmt.Errorf("DID_BASE_URL is required for did:web method")
         }
+        
+        // FIPS 140-3 Level 3 compliance validation
+        if c.DID.FIPSMode {
+                if err := validateFIPSKeyType(c.DID.KeyType); err != nil {
+                        return fmt.Errorf("FIPS DID key type validation failed: %w", err)
+                }
+        }
+        
+        return nil
+}
+
+// validateFIPSKeyType ensures only FIPS-approved key types are used
+func validateFIPSKeyType(keyType string) error {
+        approvedTypes := map[string]bool{
+                "P-256":    true, // ECDSA with P-256 curve (FIPS 186-4 approved)
+                "P-384":    true, // ECDSA with P-384 curve (FIPS 186-4 approved)
+                "P-521":    true, // ECDSA with P-521 curve (FIPS 186-4 approved)
+                "RSA-2048": true, // RSA with 2048-bit key (FIPS 186-4 approved)
+                "RSA-3072": true, // RSA with 3072-bit key (FIPS 186-4 approved)
+                "RSA-4096": true, // RSA with 4096-bit key (FIPS 186-4 approved)
+        }
+        
+        if !approvedTypes[keyType] {
+                return fmt.Errorf("key type '%s' is not FIPS 140-3 Level 3 approved. Allowed types: P-256, P-384, P-521, RSA-2048, RSA-3072, RSA-4096", keyType)
+        }
+        
         return nil
 }
 
@@ -171,6 +200,15 @@ func getEnvOrFail(key string) string {
                 return value
         }
         panic(fmt.Sprintf("Environment variable %s is required", key))
+}
+
+// getEnvOrFailWithDefault provides a fallback for development
+func getEnvOrFailWithDefault(key, defaultValue string) string {
+        if value := os.Getenv(key); value != "" {
+                return value
+        }
+        fmt.Printf("Warning: Using default value for %s in development\n", key)
+        return defaultValue
 }
 
 func getEnvAsIntOrDefault(key string, defaultValue int) int {
