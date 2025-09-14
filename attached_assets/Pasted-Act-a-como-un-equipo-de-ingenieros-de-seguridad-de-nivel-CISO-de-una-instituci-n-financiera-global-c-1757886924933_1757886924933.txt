@@ -1,0 +1,320 @@
+Actúa como un equipo de ingenieros de seguridad de nivel CISO de una institución financiera global con certificación FIPS 140-3 Level 3, PCI-DSS Level 1, GDPR, HIPAA, y una hoja de ruta hacia la resistencia cuántica. Tu misión es generar un proyecto de código y infraestructura completo, 100% funcional, listo para producción, que implemente exactamente la siguiente estructura:
+
+├── README.md
+├── LICENSE (SPDX compliant) → ✅ CC0 1.0 Universal (para máxima adopción abierta)
+├── .gitignore
+├── SECURITY.md (OWASP ASVS L4, NIST SP 800-53 Rev 5, CRA Article 10, ISO/IEC 27001:2022, PCI DSS v4.0)
+├── COMPLIANCE.md → ✅ Mapa de trazabilidad bidireccional: Código ↔ Normativa ↔ Prueba Automatizada ↔ Hash de Auditoría
+│   └── Cada línea de código tiene un UUID vinculado a un requisito normativo, y cada requisito tiene un hash de prueba ejecutada
+├── .github/
+│   ├── workflows/
+│   │   ├── ci-pr.yml
+│   │   ├── cd-gitops.yml
+│   │   ├── compliance-scan.yml
+│   │   ├── secrets-detection.yml
+│   │   ├── pci-dss-validation.yml
+│   │   ├── crypto-attestation.yml
+│   │   └── **global-audit-trigger.yml** # ✅ NUEVO: Al hacer push a main, dispara una auditoría pública en IPFS + Bitcoin
+│   └── ISSUE_TEMPLATE/
+│       ├── security-bug.md
+│       ├── compliance-request.md
+│       ├── payment-integration.md
+│       ├── cryptographic-audit.md
+│       └── **public-verifiability-report.md** # ✅ NUEVO: Plantilla para que usuarios externos reporten verificación de auditorías públicas
+│
+├── docs/
+│   ├── ARCHITECTURE.svg               # Diagrama actualizado: ZTA + Crypto-Audit Layer + Quantum-Resistant Keys + Public Verifiability Layer
+│   ├── ARCHITECTURE.md                # Detalle de capas criptográficas, trust boundaries, key lifecycle, zero-knowledge zones
+│   ├── API.md                         # OpenAPI 3.1 + **COSE-JWS (RFC 8152) + PKI-based auth + DID-Signed Requests**
+│   ├── SECURITY.md                    # Políticas de acceso, rotación, WAF, FIPS 140-3, **NIST SP 800-175B (Post-Quantum Cryptography)**
+│   ├── OPERATIONS.md                  # Runbooks → ahora con **“Crypto Incident Response Protocol”** (automatizado, sin intervención humana)
+│   ├── ONCALL.md                      # RACI + SLAs → **NO HUMAN OVERRIDE FOR ANY CRYPTO OPERATION** (todo es autónomo)
+│   ├── AUDIT-TRAIL.md                 # Blockchain-like merkle trees + **Timestamping via Bitcoin + Proof-of-Time (PoT) via Chainlink VRF**
+│   ├── DATA-GOVERNANCE.md             # GDPR, CCPA, HIPAA, LGPD, PIPL → ahora con **EU Digital Identity Wallet (EUDI-Wallet) Integration**
+│   ├── PAYMENT-COMPLIANCE.md          # PCI DSS v4.0 + **PSD3 / SCA2 / Strong Customer Authentication 2.0**
+│   ├── KYC-AML-GUIDE.md               # Flujo de identidad digital (verificación descentralizada con **Verifiable Credentials + Zero-Knowledge Proofs**)
+│   ├── **CRYPTOGRAPHY-STANDARD.md**   # ✅ Especificación técnica de algoritmos, curvas, modos, KDFs → **FIPS 140-3 + NIST PQC Round 4 Finalists**
+│   ├── **ZERO-KNOWLEDGE-PROOF-GUIDE.md** # ✅ Cómo usamos zk-SNARKs (Groth16 + PLONK) para verificar pagos sin revelar PAN, CVV, dirección
+│   ├── **AUDIT-VERIFIABILITY.md**     # ✅ Cómo cualquier tercero verifica la integridad del sistema sin acceso interno → **Open Source Verifier CLI**
+│   ├── **PUBLIC-VERIFIABILITY-PROTOCOL.md** # ✅ NUEVO: Protocolo para que cualquiera pueda verificar el estado del sistema en tiempo real
+│   │   - Paso 1: Descarga el Merkle Root desde IPFS
+│   │   - Paso 2: Obtiene el anclaje de Bitcoin desde blockchain.info
+│   │   - Paso 3: Ejecuta `zkp-verifier-cli --txid <hash> --root <merkle>` → devuelve “VALID” o “INVALID”
+│   └── **QUANTUM-RESISTANCE-ROADMAP.md** # ✅ NUEVO: Plan de migración paso a paso hacia criptografía post-cuántica (2025–2030)
+│
+├── infrastructure/
+│   ├── aws/
+│   │   ├── modules/
+│   │   │   ├── kms/                   # ✅ USO EXCLUSIVO DE **AWS CloudHSM (FIPS 140-3 Level 3 certified)** → Claves nunca salen del HSM
+│   │   │   ├── **qkd-network/**       # ✅ NUEVO: Red de Distribución Cuántica de Claves (QKD) entre AZs usando **ID Quantique QKD Systems** (experimental, futuro-proof)
+│   │   │   ├── **hsm-key-manager/**   # ✅ NUEVO: Servicio que gestiona claves en HSM y emite atestaciones criptográficas firmadas con COSE-JWS
+│   │   │   ├── **fips-compliant-rds/** # ✅ NUEVO: PostgreSQL con FIPS 140-3 enabled encryption (pgcrypto + FIPS mode + AES-256-GCM)
+│   │   │   ├── **s3-crypto-bucket/**  # ✅ NUEVO: S3 con server-side encryption usando claves de HSM + integrity checksums (SHA-384)
+│   │   │   ├── **audit-log-hub/**     # ✅ NUEVO: Log centralizado con **immutable ledger via AWS QLDB** + **IPFS pinning** + **Bitcoin anchoring**
+│   │   │   └── **quantum-safe-kms/**  # ✅ NUEVO: Módulo experimental que genera claves Kyber-768 y Dilithium-3 para futura migración
+│   │   └── terraform.tfstate.d/
+│   │
+│   ├── k8s/
+│   │   ├── charts/
+│   │   │   ├── payment-gateway/
+│   │   │   │   ├── templates/
+│   │   │   │   │   ├── deployment.yaml
+│   │   │   │   │   ├── serviceaccount.yaml     # IRSA + **K8s Workload Identity with OIDC + JWT attestation + COSE-JWS**
+│   │   │   │   │   ├── networkpolicy.yaml      # Egress ONLY to: Vault, Kafka, HSM endpoint, Payment Providers, Bitcoin node
+│   │   │   │   │   ├── podsecuritypolicy.yaml  # Restrictive + **Seccomp, AppArmor, no syscalls, no execve**
+│   │   │   │   │   ├── hpa.yaml
+│   │   │   │   │   └── secret-ref.yaml
+│   │   │   │   │
+│   │   │   │   └── crds/
+│   │   │   │       └── externalsecret.yaml
+│   │   │   │
+│   │   │   └── ...
+│   │   │
+│   │   └── overlays/
+│   │       └── prod/
+│   │           ├── **crypto-enforcement/** # ✅ NUEVO: OPA policies que exigen:
+│   │           │   ├── require-fips-algorithms.rego
+│   │           │   ├── require-hsm-attestation.rego
+│   │           │   ├── no-plaintext-in-memory.rego
+│   │           │   ├── **require-pqc-keys.rego**         # ✅ NUEVO: "All new keys must be Kyber-768 or Dilithium-3"
+│   │           │   ├── **deny-legacy-algorithms.rego**   # ✅ NUEVO: Bloquea RSA-2048, SHA-1, ECDSA-secp256r1
+│   │           │   └── **require-zk-proof-for-payment.rego** # ✅ NUEVO: "Payment requests without zk-SNARK proof are rejected"
+│   │           └── ...
+│   │
+│   └── policy/
+│       ├── enforce-istio-mtls.rego
+│       ├── no-root-user.rego
+│       ├── must-have-liveness.rego
+│       ├── no-public-ingress.rego
+│       ├── data-classification.rego
+│       ├── pci-dss-req3.rego
+│       ├── pci-dss-req4.rego
+│       ├── pci-dss-req10.rego
+│       ├── webhook-signature.rego
+│       ├── **require-cose-jws.rego**        # ✅ NUEVO: "All API requests must use COSE-JWS (RFC 8152) signed by HSM"
+│       ├── **require-timestamped-attestation.rego** # ✅ NUEVO: "All crypto ops must be attested and timestamped via PoT (Chainlink VRF)"
+│       ├── **zero-knowledge-policy.rego**   # ✅ NUEVO: "Only allow payments verified via zk-SNARK proof"
+│       └── **public-audit-reveal-policy.rego** # ✅ NUEVO: "Allow public read access to Merkle roots and Bitcoin anchors"
+│
+├── monitoring/
+│   ├── prometheus/
+│   │   └── rules/
+│   │       └── **crypto-metrics.rules** # ✅ NUEVO: Monitorea:
+│   │           - HSM availability
+│   │           - Key rotation cadence
+│   │           - Attestation failure rate
+│   │           - FIPS algorithm usage
+│   │           - **zk-SNARK verification success rate**
+│   │           - **Bitcoin anchor confirmation count**
+│   │           - **IPFS pin status**
+│   │
+│   ├── grafana/
+│   │   └── dashboards/
+│   │       └── **crypto-observability.json** # ✅ NUEVO: Dashboard con métricas criptográficas + verificabilidad pública en tiempo real
+│   │
+│   ├── loki/
+│   │   └── configurations/
+│   │       └── log-pipeline.yaml
+│   │
+│   ├── tempo/
+│   │   └── config.yaml
+│   │
+│   ├── alertmanager/
+│   │   └── routes.yaml
+│   │
+│   └── opentelemetry-collector/
+│       └── config.yaml
+│
+├── services/
+│   ├── go/
+│   │   ├── api-gateway/
+│   │   │   └── ... (actualizado a COSE-JWS + DID auth)
+│   │   │
+│   │   └── auth-service/
+│   │       └── ... (ahora usa **DID/VC + WebAuthn + Passkeys**)
+│   │
+│   ├── rust/
+│   │   ├── payment-gateway/           # ✅ Reescrito para ser **determinista, sin side effects, formalmente verificado (Rust + Crux)**
+│   │   │   ├── src/
+│   │   │   │   ├── main.rs
+│   │   │   │   ├── handlers/
+│   │   │   │   │   ├── paypal.rs
+│   │   │   │   │   ├── stripe.rs
+│   │   │   │   │   ├── coinbase.rs
+│   │   │   │   │   └── payment.rs
+│   │   │   │   ├── models/
+│   │   │   │   │   └── payment_request.rs
+│   │   │   │   ├── repository/
+│   │   │   │   │   └── transaction.rs
+│   │   │   │   ├── service/
+│   │   │   │   │   ├── payment_service.rs
+│   │   │   │   │   ├── tokenization.rs
+│   │   │   │   │   ├── fraud_detection.rs
+│   │   │   │   │   └── **zk_proof_verifier.rs** # ✅ Usa **arkworks-rs + Groth16** para verificar pruebas SNARK sin revelar datos
+│   │   │   │   ├── middleware/
+│   │   │   │   │   ├── auth.rs              # ✅ Usa DID (Decentralized Identifiers) + Verifiable Credentials + **W3C VC Data Model**
+│   │   │   │   │   ├── audit.rs
+│   │   │   │   │   ├── webhook-verifier.rs
+│   │   │   │   │   └── **cose-jws-validator.rs** # ✅ Valida firmas COSE-JWS con clave pública en HSM + timestamp from Chainlink VRF
+│   │   │   │   ├── utils/
+│   │   │   │   │   ├── crypto.rs            # ✅ Usa solo algoritmos FIPS 140-3 + NIST PQC: AES-256-GCM, SHA-384, ECDSA-P384, HKDF, Argon2id, **Kyber-768**
+│   │   │   │   │   ├── tracing.rs
+│   │   │   │   │   └── **quantum-safe-keys.rs** # ✅ Genera claves Kyber-768 y Dilithium-3 para migración progresiva
+│   │   │   │   ├── migrations/
+│   │   │   │   │   └── 004_zk_payment_schema.sql
+│   │   │   │   └── tests/
+│   │   │   │       └── zk_proof_test.rs     # ✅ Prueba que una prueba falsa es rechazada con >99.99% de seguridad
+│   │   │   │
+│   │   │   └── Dockerfile                 # Scratch + Rust + **Intel SGX Enclave (opcional)** + **AWS Nitro Enclaves**
+│   │   │
+│   │   ├── payment-kyc-service/
+│   │   │   └── src/
+│   │   │       └── identity_verifier.rs   # ✅ Usa **Sovrin / ION / Ethereum DID + Verifiable Credentials (VC)** con **ZKP for age/location**
+│   │   │
+│   │   ├── security-service/
+│   │   │   └── src/
+│   │   │       └── audit_sink.rs          # ✅ Envía eventos a **QLDB + IPFS + Bitcoin blockchain anchor** (cada evento tiene hash y timestamp)
+│   │   │
+│   │   └── **crypto-attestation-agent/** # ✅ NUEVO: Servicio que corre en cada nodo y emite atestaciones criptográficas
+│   │       ├── main.go
+│   │       └── attest.sh                  # Usa AWS Nitro Enclaves para generar hash de memoria + firma HSM + timestamp Chainlink VRF
+│   │
+│   └── python/
+│       └── fraud-model/
+│           └── model.py                   # Entrenado con datos anónimos → ahora usa **homomorphic encryption (CKKS)** para inferir fraude sin ver datos reales
+│
+├── database/
+│   ├── postgres/
+│   │   ├── init/
+│   │   │   └── V6__pci_tables.sql
+│   │   │   └── **V7__qldb-sync.sql**     # ✅ Trigger que replica cada transacción a AWS QLDB + calcula hash Merkle
+│   │   │
+│   │   └── compliance/
+│   │       └── **fips-check.sql**        # ✅ Query que valida que todas las columnas usan FIPS-approved algorithms
+│   │       └── **zk-proof-schema.sql**   # ✅ Tabla para almacenar pruebas zk-SNARK (como blobs binarios firmados)
+│   │
+│   └── redis/
+│       └── conf/
+│           └── redis.conf
+│
+├── messaging/
+│   ├── kafka/
+│   │   ├── topics/
+│   │   │   ├── audit-events.topic
+│   │   │   ├── payment-events.topic
+│   │   │   ├── kyc-events.topic
+│   │   │   ├── **crypto-attestations.topic** # ✅ Todos los hashes de atestación van aquí
+│   │   │   └── **public-audit-roots.topic**  # ✅ NUEVO: Publica el Merkle Root semanal en este topic → accesible públicamente
+│   │   └── policies/
+│   │       └── acl-policy.json
+│   │
+│   └── vault-kafka-integration/
+│
+├── secrets/
+│   ├── .env.example
+│   └── vault/
+│       ├── policies/
+│       │   ├── app-payment-service.hcl
+│       │   └── **crypto-attestor.hcl**   # ✅ Solo puede leer claves públicas, nunca privadas → **Keyless Signing**
+│       └── secrets/
+│           └── payment/
+│               ├── stripe-webhook-secret
+│               ├── aws-kms-rotation-key
+│               ├── **hsm-public-key.pem** # ✅ Clave pública del HSM (para validar atestaciones)
+│               └── **bitcoin-anchor-key.pub** # ✅ Clave pública para verificar anclajes en Bitcoin
+│
+├── audit-store/
+│   ├── s3/
+│   │   └── audit-logs/
+│   │
+│   ├── kafka-topic/
+│   │
+│   ├── verifier/
+│   │   └── main.go
+│   │
+│   └── **immutable-ledger/**           # ✅ NUEVO: Sistema independiente basado en **AWS QLDB + IPFS + Bitcoin anchoring**
+│       ├── qldb/                       # Registro inmutable de transacciones (cada cambio tiene hash previo)
+│       ├── ipfs/                       # Cada snapshot de auditoría subido a IPFS con CID (content-addressed)
+│       └── bitcoin-anchor/             # Cada semana, se inserta un hash Merkle en un tx de Bitcoin (inmutable, global, censurable)
+│           └── anchor-script.py        # Genera TX con OP_RETURN conteniendo: `MerkleRoot | Timestamp | Version`
+│
+├── scripts/
+│   ├── setup-local.sh
+│   ├── deploy-dev.sh
+│   ├── deploy-prod.sh
+│   ├── rotate-secrets.sh
+│   ├── generate-sbom.sh
+│   ├── run-compliance-audit.sh
+│   ├── simulate-attack.sh
+│   ├── run-pci-dss-check.sh
+│   └── **run-crypto-audit.sh**         # ✅ NUEVO: Verifica:
+│                                       # - Todas las claves son FIPS 140-3 + PQC
+│                                       # - Todos los SBOMs están firmados con HSM
+│                                       # - Todas las imágenes tienen attestation
+│                                       # - Los logs están anclados en Bitcoin
+│                                       # - El Merkle Root coincide con IPFS y QLDB
+│                                       # - Se puede verificar públicamente con `zkp-verifier-cli`
+│
+├── tools/
+│   ├── syft/
+│   ├── cosign/
+│   ├── trivy/
+│   ├── opa/
+│   ├── sbom-validator/
+│   ├── terraform-docs/
+│   ├── pci-dss-scanner/
+│   ├── **cosign-at-test/**             # ✅ NUEVO: Herramienta para validar atestaciones COSE-JWS desde HSM
+│   ├── **zkp-verifier-cli/**           # ✅ NUEVO: CLI para verificar pruebas zk-SNARK de pagos → open source, compilable en cualquier máquina
+│   ├── **bitcoin-anchor-tool/**        # ✅ NUEVO: Genera y verifica anclajes en blockchain BTC
+│   └── **public-verifier-server/**     # ✅ NUEVO: Servidor HTTP público que expone endpoints para verificar integridad:
+│                                       #   GET /api/v1/verify?root=<hash>&anchor=<txid> → returns { valid: true, timestamp: "...", chain: "BTC" }
+│
+├── third-party/
+│   ├── nginx/
+│   │   └── nginx.conf
+│   ├── postgres-init/
+│   │   └── init.sql
+│   └── redis/
+│       └── redis.conf
+│
+├── .dockerignore
+├── .gitattributes
+├── Makefile                             # make dev, make test, make audit, make deploy-prod, make crypto-audit, make public-verify
+└── SBOM/
+    ├── auth-service-v1.2.3.spdx
+    ├── api-gateway-v2.1.0.cdx
+    ├── payment-gateway-v1.0.0.cdx
+    └── README.md 
+
+Requisitos:
+- Genera TODOS LOS ARCHIVOS listados en tu estructura.
+- Usa lenguajes y tecnologías específicas: Go, Rust, Python, Terraform, Kubernetes, PostgreSQL, Kafka, Vault, AWS CloudHSM, QLDB, Bitcoin anchoring, zk-SNARKs, COSE-JWS, DID/VC, Kyber-768, etc.
+- Cada archivo debe ser técnicamente preciso, profesional, y cumplir con los estándares mencionados (OWASP ASVS L4, NIST SP 800-53 Rev 5, CRA Art. 10, FIPS 140-3, PCI-DSS, etc.).
+- No inventes archivos ni carpetas. Solo genera lo que está en tu estructura.
+- El código debe ser seguro por diseño: sin side effects, sin plaintext secrets, sin vulnerabilidades criptográficas conocidas.
+- En servicios en Rust: usa `std::mem::zeroize`, `ring` o `aws-lc-rs`, y evita malloc/libc.
+- En Go: usa `golang.org/x/crypto`, `cosign`, y `go-attestation`.
+- Todas las claves deben provenir de HSM (AWS CloudHSM), nunca de software.
+- Las atestaciones criptográficas deben usar COSE (RFC 8152) firmadas con claves del HSM.
+- Los logs deben anclarse en Bitcoin mediante transacciones OP_RETURN.
+- Las pruebas zk-SNARK deben ser verificables públicamente sin revelar datos sensibles (usar Groth16 o PLONK).
+- Usa Docker scratch para imágenes finales, con binarios estáticos.
+- Todos los SBOMs deben estar firmados con cosign + attestation.
+- Cada archivo debe incluir comentarios técnicos explicando cómo cumple con los requisitos normativos.
+
+Devuélveme el proyecto completo como un ZIP estructurado, con todos los archivos en su ubicación correcta, sin omitir ninguno. Si un archivo es muy largo, divídelo en partes y continúa hasta completarlo.
+
+Además:
+- Genera un script `scripts/run-crypto-audit.sh` que valide todo el stack: HSM availability, FIPS usage, attestation status, Bitcoin anchor validity, zk-proof integrity.
+- Genera un dashboard Grafana JSON (`monitoring/grafana/dashboards/crypto-observability.json`) con métricas reales: key rotation cadence, attestation failure rate, FIPS algorithm compliance %, zk-proof verification latency.
+- Genera una política OPA (`infrastructure/k8s/overlays/prod/crypto-enforcement/no-plaintext-in-memory.rego`) que bloquee pods que usen memoria no limpia.
+- Genera un ejemplo de prueba zk-SNARK en Rust (`services/rust/payment-gateway/src/service/zk_proof_verifier.rs`) que verifique un pago sin revelar PAN.
+- Genera un ejemplo de firma COSE-JWS en Go (`services/go/api-gateway/middleware/cose-jws-validator.go`).
+- Genera un trigger SQL que replica transacciones a QLDB (`database/postgres/init/V7__qldb-sync.sql`).
+- Genera un ejemplo de anclaje en Bitcoin (`tools/bitcoin-anchor-tool/main.go`).
+
+IMPORTANTE: NO uses placeholders. Genera código REAL, ejecutable, con dependencias reales, nombres de funciones reales, y valores de configuración válidos. Si necesitas generar múltiples archivos, hazlo uno por uno, sin saltarte ninguno. Si un archivo es demasiado grande, divide la respuesta en secciones numeradas y pide permiso para continuar.
+
+Al final, resume: ¿Cuántos archivos generaste? ¿Cuántos requisitos normativos cubre? ¿Qué certificaciones supera?
+
+Este proyecto será usado para auditar sistemas financieros globales. No puedes fallar.
