@@ -80,8 +80,8 @@ pub async fn process_payment(
         provider: "stripe".to_string(),
         amount: payload.amount,
         currency: payload.currency.clone(),
-        customer_id: payload.customer_id,
-        metadata: payload.metadata,
+        customer_id: payload.customer_id.clone(),
+        metadata: payload.metadata.clone(),
         created_at: chrono::Utc::now(),
     };
 
@@ -146,9 +146,19 @@ pub async fn handle_webhook(
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    if !verify_stripe_signature(&body, stripe_signature).await {
-        warn!("Invalid Stripe webhook signature");
-        return Err(StatusCode::UNAUTHORIZED);
+    // Verify signature with 5 minute timestamp tolerance
+    match state.crypto_service.verify_stripe_signature(&body, stripe_signature, 300).await {
+        Ok(true) => {
+            info!("✅ Stripe webhook signature verified");
+        },
+        Ok(false) => {
+            error!("❌ Invalid Stripe webhook signature - possible attack attempt");
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            error!("❌ Stripe webhook signature verification error: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Parse webhook payload
@@ -180,8 +190,3 @@ pub async fn handle_webhook(
     Ok(StatusCode::OK)
 }
 
-async fn verify_stripe_signature(payload: &str, signature: &str) -> bool {
-    // TODO: Implement actual Stripe webhook signature verification
-    // This should use HMAC-SHA256 with the webhook endpoint secret
-    true // Placeholder
-}

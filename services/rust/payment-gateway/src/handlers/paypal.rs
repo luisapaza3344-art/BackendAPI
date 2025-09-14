@@ -226,9 +226,25 @@ pub async fn handle_webhook(
         .get("PAYPAL-TRANSMISSION-SIG")
         .and_then(|v| v.to_str().ok());
 
-    if !verify_paypal_signature(&body, paypal_transmission_sig, paypal_cert_id).await {
-        warn!("Invalid PayPal webhook signature");
-        return Err(StatusCode::UNAUTHORIZED);
+    // Verify PayPal webhook signature with certificate validation
+    match state.crypto_service.verify_paypal_signature(
+        &body,
+        paypal_auth_algo,
+        paypal_transmission_id,
+        paypal_cert_id,
+        paypal_transmission_sig
+    ).await {
+        Ok(true) => {
+            info!("✅ PayPal webhook signature verified");
+        },
+        Ok(false) => {
+            error!("❌ Invalid PayPal webhook signature - possible attack attempt");
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            error!("❌ PayPal webhook signature verification error: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Parse webhook payload
@@ -263,15 +279,6 @@ pub async fn handle_webhook(
     Ok(StatusCode::OK)
 }
 
-async fn verify_paypal_signature(
-    payload: &str, 
-    signature: Option<&str>, 
-    cert_id: Option<&str>
-) -> bool {
-    // TODO: Implement PayPal webhook signature verification
-    // This requires validating against PayPal's public certificate
-    signature.is_some() && cert_id.is_some()
-}
 
 fn validate_card_number(card_number: &str) -> bool {
     // Basic Luhn algorithm validation for PCI-DSS compliance

@@ -23,7 +23,7 @@ pub struct CoinbasePaymentRequest {
     pub customer_info: Option<CoinbaseCustomerInfo>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CoinbaseLocalPrice {
     pub amount: String,
     pub currency: String, // "USD", "EUR", etc.
@@ -238,7 +238,7 @@ async fn process_coinbase_payment_internal(
     // Mock successful response
     Ok(CoinbasePaymentResponse {
         id: payment_request.id.to_string(),
-        code: format!("CB{}", payment_request.id.simple().to_uppercase()[..8].to_string()),
+        code: format!("CB{}", &payment_request.id.simple().to_string()[..8].to_uppercase()),
         name: coinbase_payload.name.clone(),
         description: coinbase_payload.description.clone(),
         logo_url: None,
@@ -292,9 +292,19 @@ pub async fn handle_webhook(
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    if !verify_coinbase_signature(&body, cb_signature).await {
-        warn!("Invalid Coinbase webhook signature");
-        return Err(StatusCode::UNAUTHORIZED);
+    // Verify Coinbase Commerce webhook signature
+    match state.crypto_service.verify_coinbase_signature(&body, cb_signature).await {
+        Ok(true) => {
+            info!("✅ Coinbase webhook signature verified");
+        },
+        Ok(false) => {
+            error!("❌ Invalid Coinbase webhook signature - possible attack attempt");
+            return Err(StatusCode::UNAUTHORIZED);
+        },
+        Err(e) => {
+            error!("❌ Coinbase webhook signature verification error: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
     }
 
     // Parse webhook payload
@@ -338,11 +348,6 @@ pub async fn handle_webhook(
     Ok(StatusCode::OK)
 }
 
-async fn verify_coinbase_signature(payload: &str, signature: &str) -> bool {
-    // TODO: Implement Coinbase Commerce webhook signature verification
-    // This uses HMAC-SHA256 with the webhook shared secret
-    !signature.is_empty()
-}
 
 async fn perform_sanctions_screening(country: &str, email: &str) -> bool {
     // TODO: Implement actual sanctions screening against:

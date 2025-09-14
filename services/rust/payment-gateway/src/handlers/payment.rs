@@ -43,6 +43,7 @@ pub async fn get_payment_status(
 
     match state.payment_service.get_payment_status(&payment_id).await {
         Ok(status) => {
+            let payment_id_clone = payment_id.clone();
             let response = PaymentStatusResponse {
                 id: payment_id,
                 status,
@@ -52,13 +53,13 @@ pub async fn get_payment_status(
                 created_at: chrono::Utc::now().to_rfc3339(),
                 updated_at: chrono::Utc::now().to_rfc3339(),
                 attestation_hash: state.crypto_service
-                    .generate_hsm_attestation(&payment_id)
+                    .generate_hsm_attestation(&payment_id_clone)
                     .await
                     .unwrap_or_default(),
                 blockchain_anchor: None, // TODO: Get Bitcoin transaction hash
             };
             
-            info!("✅ Payment status retrieved successfully: {}", payment_id);
+            info!("✅ Payment status retrieved successfully: {}", payment_id_clone);
             Ok(Json(response))
         },
         Err(e) => {
