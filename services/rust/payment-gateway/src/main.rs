@@ -15,9 +15,10 @@ use tower_http::{
     compression::CompressionLayer,
     set_header::SetResponseHeaderLayer,
 };
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 use uuid::Uuid;
 
+mod crypto;
 mod handlers;
 mod models;
 mod repository;
@@ -27,7 +28,8 @@ mod utils;
 mod metrics;
 
 use crate::{
-    handlers::{paypal, stripe, coinbase, payment},
+    crypto::{ZKProofSystem, PostQuantumCrypto},
+    handlers::{advanced_security, paypal, stripe, coinbase, payment},
     middleware::{auth::AuthMiddleware, audit::AuditMiddleware},
     service::payment_service::PaymentService,
     utils::crypto::CryptoService,
@@ -38,6 +40,8 @@ use crate::{
 pub struct AppState {
     pub payment_service: Arc<PaymentService>,
     pub crypto_service: Arc<CryptoService>,
+    pub zk_system: Arc<ZKProofSystem>,
+    pub quantum_crypto: Arc<PostQuantumCrypto>,
     pub metrics: Arc<PaymentMetrics>,
 }
 
@@ -160,11 +164,22 @@ async fn main() -> anyhow::Result<()> {
     // Initialize services
     let crypto_service = Arc::new(CryptoService::new().await?);
     let payment_service = Arc::new(PaymentService::new().await?);
+    
+    // Initialize Zero-Knowledge Proof System for financial-grade privacy
+    info!("🔐 Initializing Zero-Knowledge Proof System for enhanced privacy compliance");
+    let zk_system = Arc::new(ZKProofSystem::new().await?);
+    
+    // Initialize Post-Quantum Cryptography for quantum-resistant security
+    info!("🛡️ Initializing Post-Quantum Cryptography (NIST standards)");
+    let quantum_crypto = Arc::new(PostQuantumCrypto::new().await?);
+    
     let metrics = Arc::new(PaymentMetrics::new()?);
 
     let app_state = AppState {
         payment_service,
         crypto_service,
+        zk_system,
+        quantum_crypto,
         metrics: metrics.clone(),
     };
 
@@ -178,6 +193,13 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/webhooks/stripe", post(stripe::handle_webhook))
         .route("/v1/webhooks/paypal", post(paypal::handle_webhook))
         .route("/v1/webhooks/coinbase", post(coinbase::handle_webhook))
+        // DISABLED: Advanced Security endpoints until real verification is implemented
+        // SECURITY: These endpoints were returning fake/mock results which is dangerous
+        // .route("/v1/security/verify-zk-proof", post(advanced_security::verify_zk_proof))
+        // .route("/v1/security/system-integrity", get(advanced_security::verify_system_integrity))
+        // .route("/v1/security/verify-quantum-signature", post(advanced_security::verify_quantum_signature))
+        // .route("/v1/compliance/report", get(advanced_security::compliance_report))
+        .route("/v1/security/threat-detection", get(advanced_security::threat_detection_status))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())

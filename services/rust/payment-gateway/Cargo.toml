@@ -32,13 +32,18 @@ blake3 = "1.5"
 argon2 = "0.5"
 aes-gcm = "0.10"
 
-# Zero-knowledge proofs (simplified for initial version)
-# ark-bn254 = "0.4"
-# ark-groth16 = "0.4" 
-# ark-serialize = "0.4"
-# ark-ff = "0.4"
-# ark-ec = "0.4"
-# ark-std = "0.4"
+# Zero-Knowledge Proofs and Advanced Cryptography for Financial-Grade Security
+ark-groth16 = "0.4"
+ark-bn254 = "0.4"
+ark-ff = "0.4"
+ark-ec = "0.4"
+ark-std = "0.4"
+ark-serialize = "0.4"
+
+# Post-Quantum Cryptography (NIST Standards)
+pqcrypto-kyber = "0.8"
+pqcrypto-dilithium = "0.5"
+pqcrypto-sphincsplus = "0.7"
 
 # Payment provider SDKs - using compatible versions for financial security
 # stripe = { version = "0.27", features = ["async"] } # Latest version not available, using HTTP client
