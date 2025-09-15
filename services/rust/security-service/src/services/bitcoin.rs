@@ -35,16 +35,25 @@ impl BitcoinService {
         let client = Client::new(&config.rpc_url, auth)
             .map_err(|e| SecurityError::Bitcoin(format!("Failed to connect to Bitcoin node: {}", e)))?;
 
-        // Test connection
-        let blockchain_info = client
-            .get_blockchain_info()
-            .map_err(|e| SecurityError::Bitcoin(format!("Failed to get blockchain info: {}", e)))?;
-
-        log_blockchain_anchor(
-            "connection_test",
-            None,
-            &format!("connected_to_block_{}", blockchain_info.blocks),
-        );
+        // Test connection - handle failures gracefully
+        match client.get_blockchain_info() {
+            Ok(blockchain_info) => {
+                log_blockchain_anchor(
+                    "connection_test",
+                    None,
+                    &format!("connected_to_block_{}", blockchain_info.blocks),
+                );
+                tracing::info!("✅ Bitcoin connection established, block height: {}", blockchain_info.blocks);
+            }
+            Err(e) => {
+                tracing::warn!("⚠️ Bitcoin connection failed: {} - Service will continue with degraded functionality", e);
+                log_blockchain_anchor(
+                    "connection_test",
+                    None,
+                    "connection_failed",
+                );
+            }
+        }
 
         let crypto = FIPSCrypto::new(true);
 
