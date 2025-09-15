@@ -82,6 +82,9 @@ prometheus = "0.13"
 hex = "0.4"
 hmac = "0.12"
 
+# PCI-DSS data masking and validation
+regex = "1.10"
+
 # Additional crypto for real verification
 p256 = "0.13"
 p384 = "0.13"

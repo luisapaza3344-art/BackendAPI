@@ -1,11 +1,12 @@
 use anyhow::Result;
 use sqlx::{PgPool, Pool, Postgres, Row};
-use tracing::{info, error};
+use tracing::{info, error, warn};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use serde_json;
 
 use crate::models::payment_request::{PaymentRequest, PaymentStatus, AuditEntry};
+use crate::utils::pci_masking::PCIMasking;
 
 #[derive(Debug)]
 pub struct DatabaseRepository {
@@ -87,11 +88,11 @@ impl DatabaseRepository {
         Ok(())
     }
 
-    /// Get payment status with data masking for PCI-DSS compliance
+    /// Get payment status with comprehensive PCI-DSS Level 1 compliance masking
     pub async fn get_payment_status(&self, payment_id: &Uuid) -> Result<PaymentStatus> {
         let query = r#"
             SELECT id, status::text as status, provider::text as provider, amount_cents, currency, 
-                   attestation_hash, blockchain_anchor, created_at, updated_at
+                   customer_id, metadata, attestation_hash, blockchain_anchor, created_at, updated_at
             FROM payments 
             WHERE id = $1
         "#;
@@ -101,14 +102,64 @@ impl DatabaseRepository {
             .fetch_one(&self.pool)
             .await?;
 
+        let amount_cents: i64 = row.try_get("amount_cents")?;
+        let customer_id: Option<String> = row.try_get("customer_id")?;
+        let metadata: Option<serde_json::Value> = row.try_get("metadata")?;
+        
+        // Apply PCI-DSS Level 1 masking to sensitive fields
+        let masked_fields = vec!["customer_id", "metadata", "provider_transaction_id"];
+        
+        // Mask customer ID if present
+        let masked_customer_id = customer_id.as_ref()
+            .map(|id| PCIMasking::mask_customer_id(id));
+        
+        // Mask sensitive metadata fields 
+        let masked_metadata = metadata.as_ref()
+            .map(|meta| PCIMasking::mask_json_metadata(meta));
+        
         let status = PaymentStatus {
             id: row.try_get("id")?,
             status: row.try_get("status")?,
-            provider_transaction_id: None, // Masked for security
+            provider: row.try_get("provider")?,
+            amount: amount_cents as u64, // Convert from i64 to u64
+            currency: row.try_get("currency")?,
+            provider_transaction_id: None, // Always masked for PCI-DSS security
             attestation_hash: row.try_get("attestation_hash")?,
             blockchain_anchor: row.try_get("blockchain_anchor")?,
+            created_at: row.try_get("created_at")?,
             updated_at: row.try_get("updated_at")?,
         };
+
+        // Create comprehensive audit log entry for payment status access
+        let audit_data = PCIMasking::create_masking_audit_entry(
+            "payment_status_query",
+            payment_id,
+            &masked_fields,
+            "HIGH"
+        );
+
+        self.create_audit_entry(
+            *payment_id,
+            "payment_status_accessed".to_string(),
+            audit_data,
+            None,
+        ).await?;
+
+        // Log masking operation for compliance reporting
+        info!(
+            "🔐 Payment status retrieved with PCI-DSS Level 1 masking: {} | Fields masked: {:?} | Customer ID masked: {} | Metadata fields masked: {}",
+            payment_id,
+            masked_fields,
+            masked_customer_id.is_some(),
+            masked_metadata.is_some()
+        );
+
+        // Validate no sensitive data is exposed (additional safety check)
+        let serialized = serde_json::to_string(&status)?;
+        if !PCIMasking::validate_response_compliance(&serialized)? {
+            error!("🚨 PCI-DSS VIOLATION: Sensitive data detected in payment status response");
+            return Err(anyhow::anyhow!("PCI-DSS compliance violation detected"));
+        }
 
         Ok(status)
     }

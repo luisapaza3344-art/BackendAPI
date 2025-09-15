@@ -17,9 +17,13 @@ pub struct PaymentRequest {
 pub struct PaymentStatus {
     pub id: Uuid,
     pub status: String, // "pending", "processing", "completed", "failed", "cancelled"
+    pub provider: String, // "stripe", "paypal", "coinbase"
+    pub amount: u64, // Amount in cents
+    pub currency: String,
     pub provider_transaction_id: Option<String>,
     pub attestation_hash: String, // HSM-signed attestation
     pub blockchain_anchor: Option<String>, // Bitcoin transaction hash for audit trail
+    pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 

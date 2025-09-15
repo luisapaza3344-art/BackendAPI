@@ -48,10 +48,10 @@ pub async fn get_payment_status(
             let response = PaymentStatusResponse {
                 id: payment_status.id.to_string(),
                 status: payment_status.status,
-                provider: "database".to_string(), // From database query
-                amount: 0, // TODO: Add amount to PaymentStatus struct
-                currency: "USD".to_string(), // TODO: Add currency to PaymentStatus struct
-                created_at: chrono::Utc::now().to_rfc3339(), // TODO: Use actual created_at from database
+                provider: payment_status.provider,
+                amount: payment_status.amount,
+                currency: payment_status.currency,
+                created_at: payment_status.created_at.to_rfc3339(),
                 updated_at: payment_status.updated_at.to_rfc3339(),
                 attestation_hash: payment_status.attestation_hash,
                 blockchain_anchor: payment_status.blockchain_anchor,
