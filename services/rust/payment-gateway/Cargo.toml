@@ -41,7 +41,8 @@ jose-jwk = "0.1"
 cbor-diag = "0.1"
 minicbor = "0.19"
 ciborium = "0.2"
-rsa = "0.9"
+rsa = { version = "0.9", features = ["sha2", "std"] }
+signature = "2.0"
 
 # Zero-Knowledge Proofs and Advanced Cryptography for Financial-Grade Security
 ark-groth16 = "0.4"
@@ -81,6 +82,13 @@ prometheus = "0.13"
 # Webhook verification
 hex = "0.4"
 hmac = "0.12"
+
+# Certificate parsing and validation for PayPal webhooks
+x509-parser = "0.15"
+der-parser = "8.2"
+subtle = "2.5"
+crc32fast = "1.4"
+rand = "0.8"
 
 # PCI-DSS data masking and validation
 regex = "1.10"

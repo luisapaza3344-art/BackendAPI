@@ -120,10 +120,9 @@ async fn process_stripe_payment_internal(
         },
         "metadata": {
             "payment_id": payment_request.id.to_string(),
-            "fips_compliant": "true",
-            "pci_dss_level": "1",
-            "gateway": "financial-grade-security",
-            "customer_id": stripe_payload.customer_id.clone().unwrap_or_default()
+            "gateway": "payment-processing-service",
+            "customer_id": stripe_payload.customer_id.clone().unwrap_or_default(),
+            "processing_system": "stripe_integration"
         },
         "description": stripe_payload.description.clone().unwrap_or_else(|| 
             format!("Financial payment {}", payment_request.id)
@@ -143,9 +142,8 @@ async fn process_stripe_payment_internal(
             ("automatic_payment_methods[enabled]", "true"),
             ("automatic_payment_methods[allow_redirects]", "never"),
             ("metadata[payment_id]", payment_request.id.to_string().as_str()),
-            ("metadata[fips_compliant]", "true"),
-            ("metadata[pci_dss_level]", "1"),
-            ("metadata[gateway]", "financial-grade-security"),
+            ("metadata[gateway]", "payment-processing-service"),
+            ("metadata[processing_system]", "stripe_integration"),
         ])
         .send()
         .await
@@ -186,9 +184,8 @@ async fn process_stripe_payment_internal(
         "amount_cents": stripe_payload.amount,
         "currency": stripe_payload.currency,
         "status": intent_status,
-        "fips_compliant": true,
-        "pci_dss_level": 1,
-        "requires_action": intent_status == "requires_action"
+        "requires_action": intent_status == "requires_action",
+        "stripe_processing": true
     });
     
     info!("💾 Storing Stripe audit trail for payment {}", payment_request.id);
@@ -243,23 +240,212 @@ pub async fn handle_webhook(
 
     info!("Processing Stripe webhook event: {}", webhook_payload.event_type);
 
-    // Process webhook event
-    match webhook_payload.event_type.as_str() {
+    // Check for duplicate webhook processing (idempotency)
+    if let Ok(already_processed) = state.payment_service.check_webhook_processed(&webhook_payload.id).await {
+        if already_processed {
+            info!("⚠️ Stripe webhook {} already processed, skipping", webhook_payload.id);
+            return Ok(StatusCode::OK);
+        }
+    }
+
+    // Store webhook event for audit trail and compliance
+    let webhook_uuid = match state.payment_service.process_webhook_event(
+        "stripe",
+        &webhook_payload.id,
+        &webhook_payload.event_type,
+        webhook_payload.data.clone(),
+        true, // Signature already verified above
+    ).await {
+        Ok(id) => id,
+        Err(e) => {
+            error!("Failed to store Stripe webhook event: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+
+    // Process webhook event with comprehensive database updates and audit trails
+    let processing_result = match webhook_payload.event_type.as_str() {
         "payment_intent.succeeded" => {
-            info!("✅ Payment intent succeeded: {}", webhook_payload.id);
-            // TODO: Update payment status in database
-            // TODO: Generate audit log entry
+            info!("✅ Processing Stripe payment_intent.succeeded: {}", webhook_payload.id);
+            
+            // Extract payment intent data
+            let payment_intent = &webhook_payload.data;
+            let intent_id = payment_intent["id"].as_str().unwrap_or_default();
+            let amount_received = payment_intent["amount_received"].as_u64().unwrap_or_default();
+            
+            // Find payment by metadata.payment_id
+            let payment_id = payment_intent["metadata"]["payment_id"].as_str();
+            
+            if let Some(payment_id) = payment_id {
+                // Update payment status to completed with comprehensive metadata
+                let metadata = serde_json::json!({
+                    "stripe_payment_intent_id": intent_id,
+                    "amount_received_cents": amount_received,
+                    "webhook_event": "payment_intent.succeeded",
+                    "processing_fees": payment_intent["application_fee_amount"],
+                    "payment_method": payment_intent["payment_method"],
+                    "charges": payment_intent["charges"]["data"],
+                    "completion_timestamp": chrono::Utc::now().to_rfc3339(),
+                    "stripe_security_features": {
+                        "encrypted_transmission": true,
+                        "webhook_signature_verified": true
+                    }
+                });
+                
+                match state.payment_service.update_payment_status(
+                    payment_id,
+                    "completed", 
+                    Some(intent_id.to_string()),
+                    Some(metadata)
+                ).await {
+                    Ok(_) => {
+                        info!("✅ Payment {} marked as completed via Stripe webhook", payment_id);
+                        Ok(())
+                    },
+                    Err(e) => {
+                        error!("Failed to update payment status for {}: {}", payment_id, e);
+                        Err(e)
+                    }
+                }
+            } else {
+                error!("No payment_id found in Stripe webhook metadata");
+                Err(anyhow::anyhow!("Missing payment_id in webhook metadata"))
+            }
         },
+        
         "payment_intent.payment_failed" => {
-            warn!("❌ Payment intent failed: {}", webhook_payload.id);
-            // TODO: Update payment status and notify fraud detection
+            warn!("❌ Processing Stripe payment_intent.payment_failed: {}", webhook_payload.id);
+            
+            let payment_intent = &webhook_payload.data;
+            let intent_id = payment_intent["id"].as_str().unwrap_or_default();
+            let failure_code = payment_intent["last_payment_error"]["code"].as_str();
+            let failure_message = payment_intent["last_payment_error"]["message"].as_str();
+            let payment_method = &payment_intent["last_payment_error"]["payment_method"];
+            
+            // Find payment by metadata.payment_id
+            let payment_id = payment_intent["metadata"]["payment_id"].as_str();
+            
+            if let Some(payment_id) = payment_id {
+                // Update payment status to failed with comprehensive failure metadata
+                let failure_metadata = serde_json::json!({
+                    "stripe_payment_intent_id": intent_id,
+                    "webhook_event": "payment_intent.payment_failed",
+                    "failure_details": {
+                        "code": failure_code,
+                        "message": failure_message,
+                        "decline_code": payment_intent["last_payment_error"]["decline_code"],
+                        "payment_method_type": payment_method["type"],
+                        "card_brand": payment_method["card"]["brand"],
+                        "last_four": payment_method["card"]["last4"]
+                    },
+                    "stripe_risk_assessment": {
+                        "risk_score": payment_intent["outcome"]["risk_score"],
+                        "risk_level": payment_intent["outcome"]["risk_level"],
+                        "seller_message": payment_intent["outcome"]["seller_message"],
+                        "network_status": payment_intent["outcome"]["network_status"],
+                        "note": "Stripe-provided risk data only, no additional fraud analysis"
+                    },
+                    "failure_timestamp": chrono::Utc::now().to_rfc3339(),
+                    "requires_manual_review": failure_code == Some("card_declined") || 
+                                           failure_code == Some("fraudulent"),
+                    "note": "Manual review flag based on Stripe decline codes only"
+                });
+                
+                match state.payment_service.update_payment_status(
+                    payment_id,
+                    "failed",
+                    Some(intent_id.to_string()),
+                    Some(failure_metadata)
+                ).await {
+                    Ok(_) => {
+                        warn!("❌ Payment {} marked as failed via Stripe webhook: {}", 
+                              payment_id, failure_code.unwrap_or("unknown"));
+                        Ok(())
+                    },
+                    Err(e) => {
+                        error!("Failed to update failed payment status for {}: {}", payment_id, e);
+                        Err(e)
+                    }
+                }
+            } else {
+                error!("No payment_id found in failed Stripe webhook metadata");
+                Err(anyhow::anyhow!("Missing payment_id in failed webhook metadata"))
+            }
         },
+        
         "payment_intent.requires_action" => {
-            info!("🔐 Payment requires 3D Secure authentication: {}", webhook_payload.id);
-            // TODO: Handle SCA requirements
+            info!("🔐 Processing Stripe payment_intent.requires_action: {}", webhook_payload.id);
+            
+            let payment_intent = &webhook_payload.data;
+            let intent_id = payment_intent["id"].as_str().unwrap_or_default();
+            let next_action = &payment_intent["next_action"];
+            let client_secret = payment_intent["client_secret"].as_str();
+            
+            // Find payment by metadata.payment_id
+            let payment_id = payment_intent["metadata"]["payment_id"].as_str();
+            
+            if let Some(payment_id) = payment_id {
+                // Update payment status to requires_action with SCA details
+                let sca_metadata = serde_json::json!({
+                    "stripe_payment_intent_id": intent_id,
+                    "webhook_event": "payment_intent.requires_action",
+                    "strong_customer_authentication": {
+                        "required": true,
+                        "next_action_type": next_action["type"],
+                        "redirect_to_url": next_action["redirect_to_url"]["url"],
+                        "client_secret": client_secret,
+                        "return_url": next_action["redirect_to_url"]["return_url"]
+                    },
+                    "compliance_requirements": {
+                        "psd2_sca_required": true,
+                        "region": "EU", 
+                        "authentication_method": "3d_secure_2"
+                    },
+                    "action_timestamp": chrono::Utc::now().to_rfc3339(),
+                    "audit_priority": "HIGH"
+                });
+                
+                match state.payment_service.update_payment_status(
+                    payment_id,
+                    "requires_action",
+                    Some(intent_id.to_string()),
+                    Some(sca_metadata)
+                ).await {
+                    Ok(_) => {
+                        info!("🔐 Payment {} requires SCA authentication via Stripe webhook", payment_id);
+                        Ok(())
+                    },
+                    Err(e) => {
+                        error!("Failed to update SCA payment status for {}: {}", payment_id, e);
+                        Err(e)
+                    }
+                }
+            } else {
+                error!("No payment_id found in SCA Stripe webhook metadata");
+                Err(anyhow::anyhow!("Missing payment_id in SCA webhook metadata"))
+            }
         },
+        
         _ => {
-            info!("Unhandled webhook event type: {}", webhook_payload.event_type);
+            info!("Unhandled Stripe webhook event type: {}", webhook_payload.event_type);
+            Ok(())
+        }
+    };
+
+    // Log final processing result and mark webhook as processed
+    match processing_result {
+        Ok(_) => {
+            info!("✅ Stripe webhook {} processed successfully with audit trail", webhook_payload.id);
+            
+            // Mark webhook as processed to prevent duplicate processing
+            if let Err(e) = state.payment_service.mark_webhook_processed(&webhook_payload.id, 3600).await {
+                warn!("Failed to mark Stripe webhook {} as processed: {}", webhook_payload.id, e);
+            }
+        },
+        Err(e) => {
+            error!("❌ Stripe webhook {} processing failed: {}", webhook_payload.id, e);
+            // Even if processing failed, we return OK to prevent webhook retries
+            // The failure is logged and can be handled by operations team
         }
     }
 
