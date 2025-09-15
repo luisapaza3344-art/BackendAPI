@@ -149,8 +149,9 @@ func (c *Config) validate() error {
         if c.Security.JWTSecret == "" {
                 return fmt.Errorf("JWT_SECRET is required")
         }
-        if c.Security.JWTSecret == "fips-compliant-jwt-secret-key-development-use-only" {
-                fmt.Println("Warning: Using development JWT secret. Set JWT_SECRET environment variable for production.")
+        // Production-ready JWT secret validation
+        if err := c.validateJWTSecurityProduction(); err != nil {
+                return fmt.Errorf("JWT security validation failed: %w", err)
         }
         if c.WebAuthn.RPID == "" {
                 return fmt.Errorf("WEBAUTHN_RP_ID is required")
@@ -236,4 +237,83 @@ func getEnvAsDurationOrDefault(key string, defaultValue time.Duration) time.Dura
                 }
         }
         return defaultValue
+}
+
+// validateJWTSecurityProduction enforces production-ready JWT security
+func (c *Config) validateJWTSecurityProduction() error {
+        // Check for development default secret
+        defaultSecret := "fips-compliant-jwt-secret-key-development-use-only"
+        isUsingDefaultSecret := c.Security.JWTSecret == defaultSecret
+
+        // Determine if we're in production environment
+        isProduction := c.isProductionEnvironment()
+
+        if isUsingDefaultSecret {
+                if isProduction {
+                        return fmt.Errorf("CRITICAL SECURITY VIOLATION: Default JWT secret detected in production environment. This is a severe security risk. Set a strong JWT_SECRET environment variable immediately")
+                } else {
+                        fmt.Println("Warning: Using development JWT secret. Set JWT_SECRET environment variable for production.")
+                }
+        }
+
+        // Enforce minimum JWT secret strength for production
+        if isProduction {
+                if len(c.Security.JWTSecret) < 32 {
+                        return fmt.Errorf("SECURITY REQUIREMENT: JWT secret must be at least 32 characters in production (current: %d characters)", len(c.Security.JWTSecret))
+                }
+                
+                // Additional entropy validation for production
+                if !c.isJWTSecretSufficient(c.Security.JWTSecret) {
+                        return fmt.Errorf("SECURITY REQUIREMENT: JWT secret lacks sufficient entropy for production. Use a cryptographically secure random string")
+                }
+        }
+
+        return nil
+}
+
+// isProductionEnvironment determines if we're running in production
+func (c *Config) isProductionEnvironment() bool {
+        // Multiple indicators for production detection
+        env := getEnvOrDefault("ENVIRONMENT", "development")
+        goEnv := getEnvOrDefault("GO_ENV", "development") 
+        nodeEnv := getEnvOrDefault("NODE_ENV", "development")
+
+        // Check for production indicators
+        return env == "production" || 
+                   env == "prod" ||
+                   goEnv == "production" ||
+                   nodeEnv == "production" ||
+                   c.Server.TLSEnabled // TLS enabled often indicates production
+}
+
+// isJWTSecretSufficient validates JWT secret entropy
+func (c *Config) isJWTSecretSufficient(secret string) bool {
+        // Basic entropy checks for production JWT secrets
+        if len(secret) < 32 {
+                return false
+        }
+
+        // Check for character diversity (basic entropy indicator)
+        hasLower, hasUpper, hasNumbers, hasSpecial := false, false, false, false
+        for _, char := range secret {
+                switch {
+                case char >= 'a' && char <= 'z':
+                        hasLower = true
+                case char >= 'A' && char <= 'Z':
+                        hasUpper = true
+                case char >= '0' && char <= '9':
+                        hasNumbers = true
+                default:
+                        hasSpecial = true
+                }
+        }
+
+        // Require at least 3 character types for production
+        charTypeCount := 0
+        if hasLower { charTypeCount++ }
+        if hasUpper { charTypeCount++ }
+        if hasNumbers { charTypeCount++ }
+        if hasSpecial { charTypeCount++ }
+
+        return charTypeCount >= 3
 }
