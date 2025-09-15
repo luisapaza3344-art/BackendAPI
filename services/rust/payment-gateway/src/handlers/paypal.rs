@@ -195,11 +195,7 @@ async fn process_paypal_payment_internal(
         "application_context": {
             "brand_name": "Financial Security Gateway",
             "landing_page": "BILLING",
-            "user_action": "PAY_NOW",
-            "payment_method": {
-                "payer_selected": "PAYPAL",
-                "payee_preferred": "IMMEDIATE_PAYMENT_REQUIRED"
-            }
+            "user_action": "PAY_NOW"
         }
     });
     
@@ -305,11 +301,8 @@ fn create_paypal_payment_source(source: &PayPalPaymentSource) -> serde_json::Val
             "paypal": {
                 "experience_context": {
                     "payment_method_preference": "IMMEDIATE_PAYMENT_REQUIRED",
-                    "brand_name": "Financial Security Gateway",
                     "locale": "en-US",
-                    "landing_page": "LOGIN",
-                    "shipping_preference": "NO_SHIPPING",
-                    "user_action": "PAY_NOW"
+                    "shipping_preference": "NO_SHIPPING"
                 }
             }
         }),
