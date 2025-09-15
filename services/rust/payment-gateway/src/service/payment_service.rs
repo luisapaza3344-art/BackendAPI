@@ -54,6 +54,30 @@ impl PaymentService {
         Ok(status)
     }
 
+    /// Check database connectivity and health status
+    /// 
+    /// Verifies that the PostgreSQL connection is working properly
+    /// for PCI-DSS Level 1 compliance monitoring
+    pub async fn check_database_health(&self) -> Result<bool> {
+        info!("🏥 Checking database health status");
+        
+        // Perform basic connectivity test
+        match self.db.check_connection().await {
+            Ok(true) => {
+                info!("✅ Database connection healthy - PostgreSQL responding");
+                Ok(true)
+            },
+            Ok(false) => {
+                error!("❌ Database connection unhealthy - PostgreSQL not responding properly");
+                Ok(false)
+            },
+            Err(e) => {
+                error!("❌ Database health check failed: {}", e);
+                Ok(false)
+            }
+        }
+    }
+
     /// Check if webhook has already been processed (for idempotency)
     pub async fn check_webhook_processed(&self, event_id: &str) -> Result<bool> {
         info!("Checking if webhook {} already processed", event_id);

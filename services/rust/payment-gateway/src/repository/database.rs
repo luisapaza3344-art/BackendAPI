@@ -88,6 +88,29 @@ impl DatabaseRepository {
         Ok(())
     }
 
+    /// Check database connection health
+    /// 
+    /// Performs a basic connectivity test to verify PostgreSQL is responding
+    pub async fn check_connection(&self) -> Result<bool> {
+        info!("🔍 Testing database connection");
+        
+        // Perform a simple query to test connectivity
+        let query_result = sqlx::query("SELECT 1 as test")
+            .fetch_one(&self.pool)
+            .await;
+            
+        match query_result {
+            Ok(_) => {
+                info!("✅ Database connectivity test passed");
+                Ok(true)
+            },
+            Err(e) => {
+                error!("❌ Database connectivity test failed: {}", e);
+                Ok(false)
+            }
+        }
+    }
+
     /// Get payment status with comprehensive PCI-DSS Level 1 compliance masking
     pub async fn get_payment_status(&self, payment_id: &Uuid) -> Result<PaymentStatus> {
         let query = r#"

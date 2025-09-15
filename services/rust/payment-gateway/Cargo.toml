@@ -97,9 +97,22 @@ regex = "1.10"
 p256 = "0.13"
 p384 = "0.13"
 
+# PKCS#11 HSM Integration for real HSM verification
+cryptoki = "0.6"
+
+# OpenSSL for real FIPS mode verification (optional)
+openssl = { version = "0.10", features = ["vendored"], optional = true }
+
+# System information for FIPS kernel checks
+procfs = "0.16"
+
 # PCI-DSS tokenization and caching
 base64 = "0.21"
 lru = "0.12"
+
+[features]
+default = []
+openssl-fips = ["dep:openssl"]
 
 [dev-dependencies]
 tokio-test = "0.4"
