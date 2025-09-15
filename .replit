@@ -97,12 +97,12 @@ externalPort = 80
 exposeLocalhost = true
 
 [[ports]]
-localPort = 33393
-externalPort = 3001
-
-[[ports]]
 localPort = 37431
 externalPort = 3000
+
+[[ports]]
+localPort = 38097
+externalPort = 3001
 
 [nix]
 channel = "stable-25_05"

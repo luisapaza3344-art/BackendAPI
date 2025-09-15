@@ -2,8 +2,11 @@ use ark_bn254::{Bn254, Fr, G1Projective as G1, G2Projective as G2};
 use ark_ec::{Group, CurveGroup};
 use ark_ff::{BigInteger, PrimeField, UniformRand};
 use ark_groth16::{Groth16, PreparedVerifyingKey, Proof, ProvingKey, VerifyingKey};
+use ark_snark::SNARK;
+use ark_r1cs_std::fields::fp::FpVar;
 use ark_serialize::{CanonicalDeserialize, CanonicalSerialize};
 use ark_std::rand::thread_rng;
+use rand::CryptoRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{info, warn};
@@ -73,8 +76,8 @@ impl ZKProofSystem {
         // Simulate circuit setup (in production: load from secure storage)
         let mut rng = thread_rng();
         
-        // This is a simplified mock - real implementation would use actual circuit
-        let (pk, vk) = self.generate_mock_keys(&mut rng)?;
+        // This uses real Groth16 key generation with actual constraint system
+        let (pk, vk) = self.generate_groth16_keys(&mut rng)?;
         
         let prepared_vk = PreparedVerifyingKey::from(vk);
         
@@ -103,7 +106,7 @@ impl ZKProofSystem {
         
         // Generate the proof
         let mut rng = thread_rng();
-        let proof = self.create_mock_proof(&mut rng, &witness)?;
+        let proof = self.create_groth16_proof(&mut rng, &witness)?;
         
         // Serialize proof for storage/transmission
         let mut proof_bytes = Vec::new();
@@ -163,7 +166,7 @@ impl ZKProofSystem {
         let public_inputs = self.public_data_to_field_elements(expected_public_data)?;
         
         // Verify the proof
-        let is_valid = self.verify_mock_proof(verifying_key, &groth16_proof, &public_inputs)?;
+        let is_valid = self.verify_groth16_proof(verifying_key, &groth16_proof, &public_inputs)?;
         
         if is_valid {
             info!("✅ ZK payment proof verified successfully");
@@ -236,64 +239,210 @@ impl ZKProofSystem {
         Ok(hex::encode(hash))
     }
     
-    /// Generate mock proving and verifying keys (placeholder for real setup)
-    fn generate_mock_keys(
+    /// Generate real Groth16 keys using trusted setup for payment verification circuit
+    fn generate_groth16_keys(
         &self,
-        rng: &mut impl ark_std::rand::Rng,
+        rng: &mut (impl ark_std::rand::Rng + CryptoRng),
     ) -> Result<(ProvingKey<Bn254>, VerifyingKey<Bn254>), anyhow::Error> {
-        // This is a simplified mock for demonstration
-        // Real implementation would use actual circuit compilation
+        use ark_relations::{
+            lc, 
+            r1cs::{ConstraintSynthesizer, ConstraintSystemRef, SynthesisError, Variable},
+        };
+        use ark_r1cs_std::prelude::*;
         
-        let g1_gen = G1::rand(rng).into_affine();
-        let g2_gen = G2::rand(rng).into_affine();
+        // Define a simple payment verification circuit
+        #[derive(Clone)]
+        struct PaymentVerificationCircuit {
+            // Public inputs
+            pub amount_cents: Option<Fr>,
+            pub merchant_id_hash: Option<Fr>, 
+            pub timestamp: Option<Fr>,
+            pub currency_hash: Option<Fr>,
+            
+            // Private witnesses
+            pub card_token_hash: Option<Fr>,
+            pub customer_id_hash: Option<Fr>,
+            pub provider_ref_hash: Option<Fr>,
+            pub risk_score: Option<Fr>,
+        }
         
-        // Mock proving key
-        let pk = ProvingKey {
-            vk: VerifyingKey {
-                alpha_g1: g1_gen,
-                beta_g2: g2_gen,
-                gamma_g2: g2_gen,
-                delta_g2: g2_gen,
-                gamma_abc_g1: vec![g1_gen; 5], // 4 public inputs + 1
-            },
-            beta_g1: g1_gen,
-            delta_g1: g1_gen,
-            a_query: vec![g1_gen; 8], // witness size
-            b_g1_query: vec![g1_gen; 8],
-            b_g2_query: vec![g2_gen; 8],
-            h_query: vec![g1_gen; 7],
-            l_query: vec![g1_gen; 4],
+        impl ConstraintSynthesizer<Fr> for PaymentVerificationCircuit {
+            fn generate_constraints(self, cs: ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
+                // Allocate public inputs
+                let _amount = FpVar::new_input(cs.clone(), || {
+                    self.amount_cents.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _merchant = FpVar::new_input(cs.clone(), || {
+                    self.merchant_id_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _timestamp = FpVar::new_input(cs.clone(), || {
+                    self.timestamp.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _currency = FpVar::new_input(cs.clone(), || {
+                    self.currency_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                
+                // Allocate private witnesses
+                let _card_token = FpVar::new_witness(cs.clone(), || {
+                    self.card_token_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _customer = FpVar::new_witness(cs.clone(), || {
+                    self.customer_id_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _provider_ref = FpVar::new_witness(cs.clone(), || {
+                    self.provider_ref_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _risk_score = FpVar::new_witness(cs.clone(), || {
+                    self.risk_score.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                
+                // Add simple constraint: amount must be positive (greater than 0)
+                // This is a basic validation - real circuit would have more complex constraints
+                let zero = FpVar::constant(Fr::from(0u64));
+                _amount.enforce_cmp(&zero, std::cmp::Ordering::Greater, false)?;
+                
+                Ok(())
+            }
+        }
+        
+        // Create circuit instance for key generation
+        let circuit = PaymentVerificationCircuit {
+            amount_cents: None,
+            merchant_id_hash: None,
+            timestamp: None,
+            currency_hash: None,
+            card_token_hash: None,
+            customer_id_hash: None,
+            provider_ref_hash: None,
+            risk_score: None,
         };
         
-        let vk = pk.vk.clone();
+        // Generate real Groth16 setup
+        info!("🔐 Generating real Groth16 trusted setup for payment verification circuit");
+        let (pk, vk) = Groth16::<Bn254>::circuit_specific_setup(circuit, rng)
+            .map_err(|e| anyhow::anyhow!("Groth16 setup failed: {}", e))?;
         
+        info!("✅ Real Groth16 keys generated successfully");
         Ok((pk, vk))
     }
     
-    /// Create mock proof (placeholder for real proof generation)
-    fn create_mock_proof(
+    /// Create real Groth16 proof using actual circuit and witness data
+    fn create_groth16_proof(
         &self,
-        rng: &mut impl ark_std::rand::Rng,
-        _witness: &[Fr],
+        rng: &mut (impl ark_std::rand::Rng + CryptoRng),
+        witness: &[Fr],
     ) -> Result<Proof<Bn254>, anyhow::Error> {
-        // Mock proof for demonstration
-        Ok(Proof {
-            a: G1::rand(rng).into_affine(),
-            b: G2::rand(rng).into_affine(),
-            c: G1::rand(rng).into_affine(),
-        })
+        use ark_relations::r1cs::{ConstraintSynthesizer, SynthesisError};
+        use ark_r1cs_std::prelude::*;
+        
+        // Ensure we have the expected witness length (4 public + 4 private)
+        if witness.len() < 8 {
+            return Err(anyhow::anyhow!("Insufficient witness data: expected 8, got {}", witness.len()));
+        }
+        
+        // Payment verification circuit with actual witness data
+        #[derive(Clone)]
+        struct PaymentVerificationCircuit {
+            pub amount_cents: Option<Fr>,
+            pub merchant_id_hash: Option<Fr>, 
+            pub timestamp: Option<Fr>,
+            pub currency_hash: Option<Fr>,
+            pub card_token_hash: Option<Fr>,
+            pub customer_id_hash: Option<Fr>,
+            pub provider_ref_hash: Option<Fr>,
+            pub risk_score: Option<Fr>,
+        }
+        
+        impl ConstraintSynthesizer<Fr> for PaymentVerificationCircuit {
+            fn generate_constraints(self, cs: ark_relations::r1cs::ConstraintSystemRef<Fr>) -> Result<(), SynthesisError> {
+                // Same constraint system as in key generation
+                let _amount = FpVar::new_input(cs.clone(), || {
+                    self.amount_cents.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _merchant = FpVar::new_input(cs.clone(), || {
+                    self.merchant_id_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _timestamp = FpVar::new_input(cs.clone(), || {
+                    self.timestamp.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _currency = FpVar::new_input(cs.clone(), || {
+                    self.currency_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                
+                let _card_token = FpVar::new_witness(cs.clone(), || {
+                    self.card_token_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _customer = FpVar::new_witness(cs.clone(), || {
+                    self.customer_id_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _provider_ref = FpVar::new_witness(cs.clone(), || {
+                    self.provider_ref_hash.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                let _risk_score = FpVar::new_witness(cs.clone(), || {
+                    self.risk_score.ok_or(SynthesisError::AssignmentMissing)
+                })?;
+                
+                // Add payment validation constraint
+                let zero = FpVar::constant(Fr::from(0u64));
+                _amount.enforce_cmp(&zero, std::cmp::Ordering::Greater, false)?;
+                
+                Ok(())
+            }
+        }
+        
+        // Create circuit with actual witness values
+        let circuit = PaymentVerificationCircuit {
+            amount_cents: Some(witness[0]),
+            merchant_id_hash: Some(witness[1]),
+            timestamp: Some(witness[2]),
+            currency_hash: Some(witness[3]),
+            card_token_hash: Some(witness[4]),
+            customer_id_hash: Some(witness[5]),
+            provider_ref_hash: Some(witness[6]),
+            risk_score: Some(witness[7]),
+        };
+        
+        // Get the proving key for this circuit
+        let proving_key = self.proving_keys.get("payment_verification_v1")
+            .ok_or_else(|| anyhow::anyhow!("Proving key not found"))?;
+        
+        // Generate real Groth16 proof
+        info!("🔐 Generating real Groth16 proof with witness data");
+        let proof = Groth16::<Bn254>::prove(proving_key, circuit, rng)
+            .map_err(|e| anyhow::anyhow!("Proof generation failed: {}", e))?;
+        
+        info!("✅ Real Groth16 proof generated successfully");
+        Ok(proof)
     }
     
-    /// Verify mock proof (placeholder for real verification)
-    fn verify_mock_proof(
+    /// Real Groth16 proof verification using arkworks
+    fn verify_groth16_proof(
         &self,
-        _vk: &PreparedVerifyingKey<Bn254>,
-        _proof: &Proof<Bn254>,
-        _public_inputs: &[Fr],
+        vk: &PreparedVerifyingKey<Bn254>,
+        proof: &Proof<Bn254>,
+        public_inputs: &[Fr],
     ) -> Result<bool, anyhow::Error> {
-        // Mock verification - always returns true for demo
-        // Real implementation would use Groth16::verify
-        Ok(true)
+        // Real Groth16 verification using arkworks
+        let verification_result = Groth16::<Bn254>::verify_with_processed_vk(
+            vk,
+            public_inputs,
+            proof,
+        );
+        
+        match verification_result {
+            Ok(is_valid) => {
+                if is_valid {
+                    info!("✅ Groth16 proof verification succeeded");
+                } else {
+                    warn!("❌ Groth16 proof verification failed - invalid proof");
+                }
+                Ok(is_valid)
+            },
+            Err(e) => {
+                warn!("❌ Groth16 proof verification error: {}", e);
+                Ok(false) // Fail closed on verification errors
+            }
+        }
     }
     
     /// Get system statistics for monitoring

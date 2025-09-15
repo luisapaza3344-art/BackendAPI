@@ -8,6 +8,7 @@ use tracing::{info, error, warn};
 use uuid::Uuid;
 use reqwest;
 use crate::{models::payment_request::PaymentRequest, AppState};
+use base64::Engine;
 
 /// Safely parse monetary amounts from string to integer cents
 /// Avoids floating point precision issues for financial calculations
@@ -333,7 +334,7 @@ async fn process_paypal_payment_internal(
 
 async fn get_paypal_access_token(client_id: &str, client_secret: &str) -> anyhow::Result<String> {
     let client = reqwest::Client::new();
-    let auth = base64::encode(format!("{}:{}", client_id, client_secret));
+    let auth = base64::engine::general_purpose::STANDARD.encode(format!("{}:{}", client_id, client_secret));
     
     let response = client
         .post("https://api-m.sandbox.paypal.com/v1/oauth2/token") // Use sandbox for now
