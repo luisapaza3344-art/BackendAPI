@@ -190,7 +190,7 @@ pub async fn verify_system_integrity(
         zero_knowledge_proofs: zk_ready,
         post_quantum_crypto: quantum_ready && pq_ready, // ZK system + crypto service readiness
         hsm_connected, // Real HSM connectivity status
-        audit_trail_immutable: true, // Security audit system not implemented in current AppState
+        audit_trail_immutable: false, // Security audit system not implemented in current AppState
         quantum_resistant_algorithms: quantum_algorithms,
         certification_compliance,
         last_security_audit: Utc::now(),
@@ -282,7 +282,7 @@ async fn verify_post_quantum_signature(
             // Use CryptoService for real post-quantum signature verification
             match app_state.crypto_service.verify_post_quantum_signature(
                 &signature.algorithm,
-                &[], // Use empty slice for now - implement proper key lookup from hash
+                &[], // TODO: INCOMPLETE - Real public key lookup not implemented
                 &signature.signature,
                 original_data,
             ).await {
@@ -336,7 +336,7 @@ async fn verify_post_quantum_signature(
             // Use CryptoService to verify post-quantum signature
             match app_state.crypto_service.verify_post_quantum_signature(
                 &signature.algorithm,
-                &[], // Use empty slice for now - implement proper key lookup from hash
+                &[], // TODO: INCOMPLETE - Real public key lookup not implemented
                 &signature.signature,
                 original_data,
             ).await {
