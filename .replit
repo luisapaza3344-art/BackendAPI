@@ -17,15 +17,15 @@ args = "Payment Gateway"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Auth Service"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Crypto Attestation Agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Security Service"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Auth Service"
 
 [[workflows.workflow]]
 name = "Payment Gateway"
@@ -38,18 +38,6 @@ waitForPort = 8080
 
 [workflows.workflow.metadata]
 outputType = "console"
-
-[[workflows.workflow]]
-name = "Auth Service"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd services/go/auth-service && go run cmd/main.go"
-waitForPort = 8000
 
 [[workflows.workflow]]
 name = "Crypto Attestation Agent"
@@ -75,13 +63,25 @@ task = "shell.exec"
 args = "cd services/rust/security-service && cargo run"
 waitForPort = 8000
 
+[[workflows.workflow]]
+name = "Auth Service"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/go/auth-service && SERVER_PORT=8099 TLS_ENABLED=false go run cmd/main.go"
+waitForPort = 8099
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 8000
 externalPort = 8000
 
 [[ports]]
-localPort = 9000
-externalPort = 9000
+localPort = 8099
+externalPort = 8099
 
 [[ports]]
 localPort = 9090
@@ -92,8 +92,8 @@ localPort = 37431
 externalPort = 3000
 
 [[ports]]
-localPort = 44463
-externalPort = 3001
+localPort = 46671
+externalPort = 3002
 
 [nix]
 channel = "stable-25_05"

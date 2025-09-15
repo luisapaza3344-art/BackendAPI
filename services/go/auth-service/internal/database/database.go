@@ -41,6 +41,7 @@ func NewFIPSDatabase(cfg *config.DatabaseConfig) (*FIPSDatabase, error) {
                 NowFunc: func() time.Time {
                         return time.Now().UTC() // Always use UTC for FIPS compliance
                 },
+                DisableForeignKeyConstraintWhenMigrating: true, // Prevent FK lock contention
         })
         if err != nil {
                 return nil, fmt.Errorf("failed to connect to database: %w", err)
@@ -60,6 +61,16 @@ func NewFIPSDatabase(cfg *config.DatabaseConfig) (*FIPSDatabase, error) {
         // Test connection
         if err := sqlDB.Ping(); err != nil {
                 return nil, fmt.Errorf("database ping failed: %w", err)
+        }
+
+        // Set timeouts to prevent indefinite hanging during migrations
+        timeoutSQL := `
+                SET lock_timeout = '5s';
+                SET statement_timeout = '60s'; 
+                SET idle_in_transaction_session_timeout = '60s';
+        `
+        if err := db.Exec(timeoutSQL).Error; err != nil {
+                return nil, fmt.Errorf("failed to set database timeouts: %w", err)
         }
 
         fipsDB := &FIPSDatabase{
@@ -101,6 +112,11 @@ func (f *FIPSDatabase) autoMigrate() error {
                 return fmt.Errorf("index creation failed: %w", err)
         }
 
+        // Ensure pgcrypto extension is available for audit triggers
+        if err := f.db.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto").Error; err != nil {
+                return fmt.Errorf("pgcrypto extension setup failed: %w", err)
+        }
+
         // Set up audit triggers for FIPS compliance
         if err := f.setupAuditTriggers(); err != nil {
                 return fmt.Errorf("audit trigger setup failed: %w", err)
@@ -113,14 +129,14 @@ func (f *FIPSDatabase) autoMigrate() error {
 // createIndexes creates performance and security indexes
 func (f *FIPSDatabase) createIndexes() error {
         indexes := []string{
-                "CREATE INDEX IF NOT EXISTS idx_users_email_verified ON users(email, email_verified) WHERE email_verified = true",
-                "CREATE INDEX IF NOT EXISTS idx_did_documents_active ON did_documents(user_id, is_active) WHERE is_active = true",
-                "CREATE INDEX IF NOT EXISTS idx_verifiable_credentials_status ON verifiable_credentials(user_id, status) WHERE status = 'active'",
+                "CREATE INDEX IF NOT EXISTS idx_users_email_verified ON users(email, email_verified)",
+                "CREATE INDEX IF NOT EXISTS idx_did_documents_active ON did_documents(user_id, is_active)",
+                "CREATE INDEX IF NOT EXISTS idx_verifiable_credentials_status ON verifiable_credentials(user_id, status)",
                 "CREATE INDEX IF NOT EXISTS idx_webauthn_credentials_user ON webauthn_credentials(user_id, is_passkey)",
-                "CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(user_id, is_active, expires_at) WHERE is_active = true",
+                "CREATE INDEX IF NOT EXISTS idx_user_sessions_active ON user_sessions(user_id, is_active, expires_at)",
                 "CREATE INDEX IF NOT EXISTS idx_audit_logs_time ON audit_logs(created_at, event_type)",
-                "CREATE INDEX IF NOT EXISTS idx_did_registry_method ON did_registry(method, status) WHERE status = 'active'",
-                "CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_expires ON webauthn_sessions(expires_at) WHERE expires_at > NOW()",
+                "CREATE INDEX IF NOT EXISTS idx_did_registry_method ON did_registry(method, status)",
+                "CREATE INDEX IF NOT EXISTS idx_webauthn_sessions_expires ON webauthn_sessions(expires_at)",
         }
 
         for _, indexSQL := range indexes {

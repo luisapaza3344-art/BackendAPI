@@ -82,11 +82,11 @@ func LoadConfig() (*Config, error) {
         cfg := &Config{
                 Server: ServerConfig{
                         Host:         getEnvOrDefault("SERVER_HOST", "0.0.0.0"),
-                        Port:         getEnvAsIntOrDefault("SERVER_PORT", 8000),
+                        Port:         getEnvAsIntOrDefault("SERVER_PORT", 8099),
                         ReadTimeout:  getEnvAsDurationOrDefault("SERVER_READ_TIMEOUT", 30*time.Second),
                         WriteTimeout: getEnvAsDurationOrDefault("SERVER_WRITE_TIMEOUT", 30*time.Second),
                         IdleTimeout:  getEnvAsDurationOrDefault("SERVER_IDLE_TIMEOUT", 120*time.Second),
-                        TLSEnabled:   getEnvAsBoolOrDefault("TLS_ENABLED", true),
+                        TLSEnabled:   getEnvAsBoolOrDefault("TLS_ENABLED", false),
                         TLSCertPath:  getEnvOrDefault("TLS_CERT_PATH", "/etc/ssl/certs/auth-service.crt"),
                         TLSKeyPath:   getEnvOrDefault("TLS_KEY_PATH", "/etc/ssl/private/auth-service.key"),
                 },
