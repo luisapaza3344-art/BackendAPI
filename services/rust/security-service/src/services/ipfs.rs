@@ -21,18 +21,27 @@ impl IPFSService {
         let client = IpfsClient::from_str(&config.api_url)
             .map_err(|e| SecurityError::IPFS(format!("Failed to create IPFS client: {}", e)))?;
 
-        // Test connection
-        let version = client
-            .version()
-            .await
-            .map_err(|e| SecurityError::IPFS(format!("Failed to connect to IPFS: {}", e)))?;
-
-        log_ipfs_operation(
-            &format!("ipfs-version-{}", version.version),
-            "connect",
-            "success",
-            None,
-        );
+        // Test connection - if it fails, log warning but continue
+        match client.version().await {
+            Ok(version) => {
+                log_ipfs_operation(
+                    &format!("ipfs-version-{}", version.version),
+                    "connect",
+                    "success",
+                    None,
+                );
+                tracing::info!("✅ IPFS connection established, version: {}", version.version);
+            }
+            Err(e) => {
+                tracing::warn!("⚠️ IPFS connection failed: {} - Service will continue with degraded functionality", e);
+                log_ipfs_operation(
+                    "ipfs-connection",
+                    "connect",
+                    "failed",
+                    None,
+                );
+            }
+        }
 
         Ok(Self { client, config })
     }
@@ -80,20 +89,48 @@ impl IPFSService {
 
         let data_size = data_bytes.len() as i64;
 
-        // Upload to IPFS
-        let cursor = Cursor::new(data_bytes);
-        let add_result = self
-            .client
-            .add(cursor)
-            .await
-            .map_err(|e| SecurityError::IPFS(format!("Failed to add data to IPFS: {}", e)))?;
+        // Upload to IPFS - handle failures gracefully
+        let cursor = Cursor::new(data_bytes.clone());
+        let add_result = match self.client.add(cursor).await {
+            Ok(result) => result,
+            Err(e) => {
+                tracing::warn!("⚠️ IPFS store failed: {} - Creating placeholder record", e);
+                log_ipfs_operation(
+                    &audit_record.id.to_string(),
+                    "store_audit_record",
+                    "failed",
+                    None,
+                );
+                // Return a placeholder record indicating IPFS is unavailable
+                return Ok(IPFSRecord {
+                    id: Uuid::new_v4(),
+                    audit_record_id: audit_record.id,
+                    ipfs_hash: format!("ipfs_unavailable_{}", audit_record.id),
+                    pin_status: "UNAVAILABLE".to_string(),
+                    gateway_url: "unavailable".to_string(),
+                    data_size,
+                    pin_service: Some("local_fallback".to_string()),
+                    created_at: Utc::now(),
+                    pinned_at: None,
+                });
+            }
+        };
 
         let ipfs_hash = add_result.hash;
 
         log_ipfs_operation(&ipfs_hash, "store_audit_record", "uploaded", Some(data_size));
 
-        // Pin the content for persistence
-        let pin_status = self.pin_content(&ipfs_hash).await?;
+        // Pin the content for persistence - handle failures gracefully
+        let pin_status = match self.pin_content(&ipfs_hash).await {
+            Ok(status) => {
+                tracing::info!("✅ IPFS content pinned successfully: {}", ipfs_hash);
+                status
+            }
+            Err(e) => {
+                tracing::warn!("⚠️ IPFS pinning failed: {} - Content added but not pinned", e);
+                "UNPINNED".to_string()
+            }
+        };
 
         let ipfs_record = IPFSRecord {
             id: Uuid::new_v4(),
