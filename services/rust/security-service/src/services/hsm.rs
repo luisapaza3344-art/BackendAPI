@@ -20,6 +20,16 @@ pub struct HSMService {
 }
 
 impl HSMService {
+    /// Get the primary key ID for deterministic derivation
+    pub fn get_key_id(&self) -> &str {
+        &self.config.key_id
+    }
+
+    /// Get the attestation key ID for deterministic derivation
+    pub fn get_attestation_key_id(&self) -> &str {
+        &self.config.attestation_key_id
+    }
+
     pub async fn new(config: HSMConfig) -> SecurityResult<Self> {
         // Validate FIPS mode
         if !config.fips_mode {
@@ -135,19 +145,22 @@ impl HSMService {
         // 2. Use FIPS 140-3 Level 3 validated cryptographic module
         // 3. Return the actual HSM signature
 
-        // ⚠️  CRITICAL: Development stub - NOT FIPS 140-3 Level 3 compliant
+        // ⚠️  CRITICAL: Development stub - NOT production ready
         // This simulates HSM signing for development only
-        let rng = rand::SystemRandom::new();
-        let mut signature_bytes = [0u8; 64]; // P-384 signature size
-        rng.fill(&mut signature_bytes)
-            .map_err(|e| SecurityError::HSM(format!("Failed to generate random bytes: {:?}", e)))?;
-
         // TODO: Replace with actual HSM signing using PKCS#11 or CloudHSM SDK
+        
+        // For development, use deterministic hash-based approach instead of random
+        use sha2::{Sha256, Digest};
+        let mut hasher = Sha256::new();
+        hasher.update(data.as_bytes());
+        hasher.update(self.config.attestation_key_id.as_bytes());
+        hasher.update(b"DEV_DETERMINISTIC_SIGNING_KEY_V1");
+        let hash = hasher.finalize();
+        
         let simulated_signature = format!(
-            "DEV_STUB_hsm_sig_{}_{}_{}",
+            "DEV_DETERMINISTIC_hsm_sig_{}_{}",
             self.config.attestation_key_id,
-            hex::encode(&signature_bytes[..32]),
-            hex::encode(&signature_bytes[32..])
+            hex::encode(&hash[..32])
         );
 
         Ok(simulated_signature)

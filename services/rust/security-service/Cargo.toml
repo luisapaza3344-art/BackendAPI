@@ -43,9 +43,11 @@ sha2 = "0.10"
 sha3 = "0.10"
 blake3 = "1.5"
 argon2 = "0.5"
-# AEAD encryption for IPFS data protection
-chacha20poly1305 = "0.10"
+# FIPS-compliant AEAD encryption for IPFS data protection  
+aes-gcm = "0.10"  # FIPS 140-2 approved AES-256-GCM
+hmac = "0.12"     # For deterministic key derivation
 base64 = "0.22"
+rand = "0.8"      # For secure DEK generation
 
 # Utilities
 uuid = { version = "1.0", features = ["v4", "serde"] }

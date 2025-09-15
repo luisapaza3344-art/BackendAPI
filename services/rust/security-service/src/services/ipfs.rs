@@ -79,9 +79,9 @@ impl IPFSService {
             "created_at": audit_record.created_at,
         });
 
-        // 🔐 ENCRYPT audit data with AEAD before IPFS storage
-        let key_id = format!("audit-encryption-{}", audit_record.id);
-        let encrypted_data = match self.encryption_service.encrypt_audit_data(&audit_data, &key_id).await {
+        // 🔐 ENCRYPT audit data with AES-256-GCM FIPS-compliant AEAD before IPFS storage
+        let kek_id = format!("audit-kek-{}", audit_record.service_name);  // Use service-level KEK for efficiency
+        let encrypted_data = match self.encryption_service.encrypt_audit_data(&audit_data, &kek_id).await {
             Ok(encrypted) => encrypted,
             Err(e) => {
                 tracing::warn!("⚠️ Encryption failed: {} - Storing placeholder record", e);
