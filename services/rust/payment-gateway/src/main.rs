@@ -30,11 +30,12 @@ mod metrics;
 use crate::{
     crypto::{ZKProofSystem, PostQuantumCrypto},
     handlers::{advanced_security, paypal, stripe, coinbase, payment},
-    middleware::{auth::AuthMiddleware, audit::AuditMiddleware},
+    middleware::{auth::auth_middleware, audit::AuditMiddleware},
     service::payment_service::PaymentService,
     utils::crypto::CryptoService,
     metrics::PaymentMetrics,
 };
+use axum::middleware::from_fn;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -231,8 +232,8 @@ async fn main() -> anyhow::Result<()> {
                     "Content-Security-Policy".parse::<axum::http::HeaderName>().unwrap(),
                     HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
                 ))
-                // Authentication and audit middleware
-                .layer(AuthMiddleware::new())
+                // Authentication and audit middleware - SECURITY: Auth first, then audit
+                .layer(from_fn(auth_middleware))
                 .layer(AuditMiddleware::new()),
         )
         .with_state(app_state);

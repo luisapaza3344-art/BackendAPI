@@ -33,6 +33,16 @@ argon2 = "0.5"
 aes-gcm = "0.10"
 hkdf = "0.12"
 
+# COSE and JWT authentication
+coset = "0.3"
+jsonwebtoken = "9.3"
+time = "0.3"
+jose-jwk = "0.1"
+cbor-diag = "0.1"
+minicbor = "0.19"
+ciborium = "0.2"
+rsa = "0.9"
+
 # Zero-Knowledge Proofs and Advanced Cryptography for Financial-Grade Security
 ark-groth16 = "0.4"
 ark-bn254 = "0.4"
@@ -57,7 +67,7 @@ url = "2.4"
 
 # Database 
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono", "json"] }
-# redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
+redis = { version = "0.24", features = ["tokio-comp", "connection-manager"] }
 
 # Configuration
 # config = "0.14"
@@ -72,11 +82,13 @@ prometheus = "0.13"
 hex = "0.4"
 hmac = "0.12"
 
-# COSE-JWS for HSM integration (simplified)
-# coset = "0.3"
+# Additional crypto for real verification
+p256 = "0.13"
+p384 = "0.13"
 
-# PCI-DSS tokenization
+# PCI-DSS tokenization and caching
 base64 = "0.21"
+lru = "0.12"
 
 [dev-dependencies]
 tokio-test = "0.4"
