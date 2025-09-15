@@ -3,6 +3,7 @@ use crate::{
     error::{SecurityError, SecurityResult},
     logging::log_ipfs_operation,
     models::{AuditRecord, IPFSRecord},
+    services::encryption::EncryptionService,
 };
 use chrono::Utc;
 use futures::{StreamExt, TryStreamExt};
@@ -14,10 +15,11 @@ use uuid::Uuid;
 pub struct IPFSService {
     client: IpfsClient,
     config: IPFSConfig,
+    encryption_service: EncryptionService,
 }
 
 impl IPFSService {
-    pub async fn new(config: IPFSConfig) -> SecurityResult<Self> {
+    pub async fn new(config: IPFSConfig, encryption_service: EncryptionService) -> SecurityResult<Self> {
         let client = IpfsClient::from_str(&config.api_url)
             .map_err(|e| SecurityError::IPFS(format!("Failed to create IPFS client: {}", e)))?;
 
@@ -43,11 +45,11 @@ impl IPFSService {
             }
         }
 
-        Ok(Self { client, config })
+        Ok(Self { client, config, encryption_service })
     }
 
-    /// Store audit record data in IPFS
-    pub async fn store_audit_record(&self, audit_record: &AuditRecord) -> SecurityResult<IPFSRecord> {
+    /// Store audit record data in IPFS with AEAD encryption
+    pub async fn store_audit_record(&mut self, audit_record: &AuditRecord) -> SecurityResult<IPFSRecord> {
         log_ipfs_operation(
             &audit_record.id.to_string(),
             "store_audit_record",
@@ -55,8 +57,8 @@ impl IPFSService {
             None,
         );
 
-        // Prepare the audit data for IPFS storage
-        let ipfs_data = serde_json::json!({
+        // Prepare the sensitive audit data for encryption
+        let audit_data = serde_json::json!({
             "audit_record_id": audit_record.id,
             "event_type": audit_record.event_type,
             "service_name": audit_record.service_name,
@@ -75,22 +77,50 @@ impl IPFSService {
             "hsm_signature": audit_record.hsm_signature,
             "integrity_proof": audit_record.integrity_proof,
             "created_at": audit_record.created_at,
-            "ipfs_metadata": {
-                "stored_at": Utc::now(),
-                "version": "1.0",
-                "format": "json",
-                "encryption": "none", // Could be enhanced with encryption
-                "compression": "none"
-            }
         });
 
-        let data_bytes = serde_json::to_vec_pretty(&ipfs_data)
-            .map_err(|e| SecurityError::IPFS(format!("Failed to serialize audit data: {}", e)))?;
+        // 🔐 ENCRYPT audit data with AEAD before IPFS storage
+        let key_id = format!("audit-encryption-{}", audit_record.id);
+        let encrypted_data = match self.encryption_service.encrypt_audit_data(&audit_data, &key_id).await {
+            Ok(encrypted) => encrypted,
+            Err(e) => {
+                tracing::warn!("⚠️ Encryption failed: {} - Storing placeholder record", e);
+                log_ipfs_operation(
+                    &audit_record.id.to_string(),
+                    "store_audit_record",
+                    "encryption_failed",
+                    None,
+                );
+                // Return a secure placeholder - no plaintext stored
+                return Ok(IPFSRecord {
+                    id: Uuid::new_v4(),
+                    audit_record_id: audit_record.id,
+                    ipfs_hash: format!("encryption_failed_{}", audit_record.id),
+                    pin_status: "ENCRYPTION_FAILED".to_string(),
+                    gateway_url: "unavailable".to_string(),
+                    data_size: 0,
+                    pin_service: Some("local_fallback".to_string()),
+                    created_at: Utc::now(),
+                    pinned_at: None,
+                });
+            }
+        };
 
-        let data_size = data_bytes.len() as i64;
+        // Create encrypted payload container for IPFS
+        let ipfs_payload = self.encryption_service.create_encrypted_ipfs_payload(&encrypted_data, audit_record.id);
+        
+        let payload_bytes = serde_json::to_vec_pretty(&ipfs_payload)
+            .map_err(|e| SecurityError::IPFS(format!("Failed to serialize encrypted payload: {}", e)))?;
 
-        // Upload to IPFS - handle failures gracefully
-        let cursor = Cursor::new(data_bytes.clone());
+        let data_size = payload_bytes.len() as i64;
+
+        tracing::info!(
+            "🔐 Audit record encrypted for IPFS storage: {} bytes, algorithm: {}",
+            data_size, encrypted_data.algorithm
+        );
+
+        // Upload encrypted payload to IPFS - handle failures gracefully
+        let cursor = Cursor::new(payload_bytes.clone());
         let add_result = match self.client.add(cursor).await {
             Ok(result) => result,
             Err(e) => {
@@ -146,9 +176,14 @@ impl IPFSService {
 
         log_ipfs_operation(
             &ipfs_hash,
-            "store_audit_record",
+            "store_audit_record", 
             "success",
             Some(data_size),
+        );
+
+        tracing::info!(
+            "🔐 ✅ Encrypted audit record successfully stored in IPFS: {}, size: {} bytes, encryption: {}",
+            ipfs_hash, data_size, encrypted_data.algorithm
         );
 
         Ok(ipfs_record)
@@ -291,7 +326,7 @@ impl IPFSService {
     }
 
     /// Batch store multiple audit records
-    pub async fn batch_store_audit_records(&self, audit_records: &[AuditRecord]) -> SecurityResult<Vec<IPFSRecord>> {
+    pub async fn batch_store_audit_records(&mut self, audit_records: &[AuditRecord]) -> SecurityResult<Vec<IPFSRecord>> {
         let mut ipfs_records = Vec::new();
 
         for audit_record in audit_records {

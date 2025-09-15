@@ -88,12 +88,12 @@ localPort = 9090
 externalPort = 80
 
 [[ports]]
-localPort = 37431
-externalPort = 3000
+localPort = 33111
+externalPort = 3001
 
 [[ports]]
-localPort = 44795
-externalPort = 3001
+localPort = 37431
+externalPort = 3000
 
 [nix]
 channel = "stable-25_05"

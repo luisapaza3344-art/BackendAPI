@@ -31,6 +31,9 @@ pub enum SecurityError {
     #[error("Cryptographic error: {0}")]
     Crypto(String),
     
+    #[error("Encryption error: {0}")]
+    Encryption(String),
+    
     #[error("FIPS compliance error: {0}")]
     FIPSCompliance(String),
     
@@ -93,6 +96,11 @@ impl IntoResponse for SecurityError {
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "Cryptographic operation failed",
                 "CRYPTO_ERROR",
+            ),
+            SecurityError::Encryption(_) => (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "Encryption operation failed",
+                "ENCRYPTION_ERROR",
             ),
             SecurityError::FIPSCompliance(_) => (
                 StatusCode::INTERNAL_SERVER_ERROR,

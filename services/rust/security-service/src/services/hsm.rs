@@ -13,6 +13,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct HSMService {
     config: HSMConfig,
     fips_mode: bool,
@@ -122,7 +123,7 @@ impl HSMService {
     }
 
     /// Generate HSM signature (simulated for development)
-    async fn generate_hsm_signature(&self, data: &str) -> SecurityResult<String> {
+    pub async fn generate_hsm_signature(&self, data: &str) -> SecurityResult<String> {
         if !self.fips_mode {
             return Err(SecurityError::FIPSCompliance(
                 "HSM signing requires FIPS mode".to_string(),

@@ -42,9 +42,10 @@ impl AuditService {
 
         // Initialize all sub-services
         let qldb_service = QLDBService::new(config.qldb.clone()).await?;
-        let ipfs_service = IPFSService::new(config.ipfs.clone()).await?;
-        let bitcoin_service = BitcoinService::new(config.bitcoin.clone()).await?;
         let hsm_service = HSMService::new(config.hsm.clone()).await?;
+        let encryption_service = crate::services::encryption::EncryptionService::new(hsm_service.clone()).await?;
+        let ipfs_service = IPFSService::new(config.ipfs.clone(), encryption_service).await?;
+        let bitcoin_service = BitcoinService::new(config.bitcoin.clone()).await?;
         let crypto = FIPSCrypto::new(config.fips.enabled);
 
         // Initialize QLDB ledger
