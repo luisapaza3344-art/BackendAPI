@@ -19,6 +19,7 @@ pub struct BitcoinService {
     config: BitcoinConfig,
     crypto: FIPSCrypto,
     network: Network,
+    connection_available: bool,
 }
 
 impl BitcoinService {
@@ -36,7 +37,7 @@ impl BitcoinService {
             .map_err(|e| SecurityError::Bitcoin(format!("Failed to connect to Bitcoin node: {}", e)))?;
 
         // Test connection - handle failures gracefully
-        match client.get_blockchain_info() {
+        let connection_available = match client.get_blockchain_info() {
             Ok(blockchain_info) => {
                 log_blockchain_anchor(
                     "connection_test",
@@ -44,6 +45,7 @@ impl BitcoinService {
                     &format!("connected_to_block_{}", blockchain_info.blocks),
                 );
                 tracing::info!("✅ Bitcoin connection established, block height: {}", blockchain_info.blocks);
+                true
             }
             Err(e) => {
                 tracing::warn!("⚠️ Bitcoin connection failed: {} - Service will continue with degraded functionality", e);
@@ -52,8 +54,9 @@ impl BitcoinService {
                     None,
                     "connection_failed",
                 );
+                false
             }
-        }
+        };
 
         let crypto = FIPSCrypto::new(true);
 
@@ -62,6 +65,7 @@ impl BitcoinService {
             config,
             crypto,
             network,
+            connection_available,
         })
     }
 
@@ -72,7 +76,35 @@ impl BitcoinService {
         // Create OP_RETURN data with the Merkle root
         let op_return_data = self.create_op_return_data(merkle_root, audit_record_ids)?;
 
-        // Create and broadcast the transaction
+        // Handle offline connection gracefully
+        if !self.connection_available {
+            let offline_anchor = BlockchainAnchor {
+                id: Uuid::new_v4(),
+                merkle_root: merkle_root.to_string(),
+                audit_record_ids: audit_record_ids.to_vec(),
+                bitcoin_txid: None, // No transaction when offline
+                bitcoin_block_height: None,
+                confirmations: None,
+                anchor_data: serde_json::json!({
+                    "op_return_data": hex::encode(&op_return_data),
+                    "network": self.config.network,
+                    "anchor_interval_blocks": self.config.anchor_interval_blocks,
+                    "created_at": Utc::now(),
+                    "offline_mode": true,
+                    "reason": "Bitcoin RPC connection unavailable"
+                }),
+                status: "OFFLINE".to_string(),
+                created_at: Utc::now(),
+                confirmed_at: None,
+            };
+
+            log_blockchain_anchor(merkle_root, None, "offline_anchor_created");
+            tracing::info!("📴 Bitcoin anchoring offline: {} - audit record preserved", merkle_root);
+
+            return Ok(offline_anchor);
+        }
+
+        // Create and broadcast the transaction (when connection is available)
         let txid = self.create_anchor_transaction(&op_return_data).await?;
 
         let blockchain_anchor = BlockchainAnchor {
@@ -130,6 +162,11 @@ impl BitcoinService {
 
     /// Create and broadcast an anchor transaction
     async fn create_anchor_transaction(&self, op_return_data: &[u8]) -> SecurityResult<String> {
+        // Double-check connection availability for defensive programming
+        if !self.connection_available {
+            return Err(SecurityError::Bitcoin("Bitcoin RPC connection not available".to_string()));
+        }
+
         // Get unspent transactions for funding
         let unspent = self
             .client
@@ -186,6 +223,12 @@ impl BitcoinService {
 
     /// Check confirmation status of an anchor transaction
     pub async fn check_anchor_confirmation(&self, txid: &str) -> SecurityResult<(Option<i64>, Option<i32>)> {
+        // Handle offline connection gracefully
+        if !self.connection_available {
+            log_blockchain_anchor("confirmation_check", Some(txid), "offline_mode");
+            return Ok((None, None)); // No block height, no confirmations when offline
+        }
+
         // In a real implementation, this would query the actual transaction
         // For now, simulate confirmation checking
         
