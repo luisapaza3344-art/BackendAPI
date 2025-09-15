@@ -23,6 +23,10 @@ args = "Auth Service"
 task = "workflow.run"
 args = "Crypto Attestation Agent"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Security Service"
+
 [[workflows.workflow]]
 name = "Payment Gateway"
 author = "agent"
@@ -59,13 +63,21 @@ waitForPort = 9000
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "Security Service"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/rust/security-service && cargo run"
+waitForPort = 8000
+
 [[ports]]
 localPort = 8000
 externalPort = 8000
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
 
 [[ports]]
 localPort = 9000
