@@ -93,10 +93,7 @@ impl ZKProofSystem {
     ) -> Result<PaymentProof, anyhow::Error> {
         let circuit_id = "payment_verification_v1";
         
-        info!("🔐 Generating ZK proof for payment verification",
-            "amount_cents" = public_data.amount_cents,
-            "merchant_id" = &public_data.merchant_id,
-        );
+        info!("🔐 Generating ZK proof for payment verification");
         
         let proving_key = self.proving_keys.get(circuit_id)
             .ok_or_else(|| anyhow::anyhow!("Proving key not found for circuit: {}", circuit_id))?;
@@ -113,7 +110,7 @@ impl ZKProofSystem {
         proof.serialize_compressed(&mut proof_bytes)?;
         
         let payment_proof = PaymentProof {
-            proof: proof_bytes,
+            proof: proof_bytes.clone(),
             public_inputs: vec![
                 public_data.amount_cents.to_string(),
                 public_data.merchant_id.clone(),
@@ -124,10 +121,7 @@ impl ZKProofSystem {
             verification_key_hash: self.compute_vk_hash(circuit_id)?,
         };
         
-        info!("✅ ZK proof generated successfully",
-            "proof_size_bytes" = proof_bytes.len(),
-            "public_inputs_count" = payment_proof.public_inputs.len(),
-        );
+        info!("✅ ZK proof generated successfully");
         
         Ok(payment_proof)
     }
@@ -138,10 +132,7 @@ impl ZKProofSystem {
         proof: &PaymentProof,
         expected_public_data: &PublicPaymentData,
     ) -> Result<bool, anyhow::Error> {
-        info!("🔍 Verifying ZK payment proof",
-            "circuit_id" = &proof.circuit_id,
-            "expected_amount" = expected_public_data.amount_cents,
-        );
+        info!("🔍 Verifying ZK payment proof");
         
         let verifying_key = self.verifying_keys.get(&proof.circuit_id)
             .ok_or_else(|| anyhow::anyhow!("Verifying key not found for circuit: {}", proof.circuit_id))?;

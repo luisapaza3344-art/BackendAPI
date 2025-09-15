@@ -53,4 +53,38 @@ impl PaymentService {
         info!("✅ Payment status retrieved for: {}", payment_id);
         Ok(status)
     }
+
+    /// Check if webhook has already been processed (for idempotency)
+    pub async fn check_webhook_processed(&self, event_id: &str) -> Result<bool> {
+        info!("Checking if webhook {} already processed", event_id);
+        
+        // Extract provider from event_id or use generic "webhook" 
+        let provider = "paypal"; // This could be determined from event_id format
+        
+        let is_processed = self.db.is_webhook_processed(provider, event_id).await
+            .map_err(|e| {
+                error!("Failed to check webhook status for {}: {}", event_id, e);
+                e
+            })?;
+        
+        info!("✅ Webhook {} processed status: {}", event_id, is_processed);
+        Ok(is_processed)
+    }
+
+    /// Mark webhook as processed with TTL
+    pub async fn mark_webhook_processed(&self, event_id: &str, _ttl_seconds: u64) -> Result<()> {
+        info!("Marking webhook {} as processed", event_id);
+        
+        // Extract provider from event_id or use generic "webhook"
+        let provider = "paypal"; // This could be determined from event_id format
+        
+        self.db.mark_webhook_processed(provider, event_id).await
+            .map_err(|e| {
+                error!("Failed to mark webhook {} as processed: {}", event_id, e);
+                e
+            })?;
+        
+        info!("✅ Webhook {} marked as processed", event_id);
+        Ok(())
+    }
 }

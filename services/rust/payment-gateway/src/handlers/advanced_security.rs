@@ -130,7 +130,7 @@ pub async fn verify_zk_proof(
             Ok(Json(response))
         }
         Err(e) => {
-            warn!( e);
+            warn!(error = %e, "Failed to initialize ZK Proofs system");
             Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
@@ -172,7 +172,7 @@ pub async fn verify_system_integrity(
     
     let response = SystemIntegrityResponse {
         integrity_status: "IN_DEVELOPMENT".to_string(),
-        fips_140_3_level_3: false, // Requires real HSM validation
+        fips_140_3_level_3: false, // Implements FIPS algorithms but not FIPS-validated modules
         pci_dss_level_1: false, // Requires external audit
         zero_knowledge_proofs: zk_ready,
         post_quantum_crypto: quantum_ready,

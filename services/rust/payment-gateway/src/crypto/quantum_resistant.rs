@@ -1,12 +1,14 @@
 use pqcrypto_kyber::kyber1024::{self, PublicKey as KyberPublicKey, SecretKey as KyberSecretKey, Ciphertext};
 use pqcrypto_dilithium::dilithium5::{self, PublicKey as DilithiumPublicKey, SecretKey as DilithiumSecretKey, DetachedSignature};
-use pqcrypto_sphincsplus::sphincsshake256256ssimple::{self, PublicKey as SphincsPlusPublicKey, SecretKey as SphincsPlusSecretKey};
-use pqcrypto_traits::kem::PublicKey as KemPublicKey;
+use pqcrypto_sphincsplus::sphincsshake256ssimple::{self, PublicKey as SphincsPlusPublicKey, SecretKey as SphincsPlusSecretKey};
+use pqcrypto_traits::kem::{PublicKey as KemPublicKey, SharedSecret as KemSharedSecret, Ciphertext as KemCiphertext};
 use pqcrypto_traits::sign::{PublicKey as SignPublicKey, DetachedSignature as SignDetachedSignature};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use tracing::{info, warn, error};
 use chrono::{DateTime, Utc};
+use hkdf::Hkdf;
+use sha2::Sha256;
 
 /// Post-Quantum Cryptography System for Financial-Grade Security
 /// Implements NIST Post-Quantum Cryptography Standards for protection against quantum computing threats
@@ -82,11 +84,7 @@ impl PostQuantumCrypto {
         pqc.generate_dilithium_keypair().await?;
         pqc.generate_sphincs_keypair().await?;
         
-        info!("✅ Post-Quantum Cryptography initialized with NIST standards",
-            "kyber" = "Kyber-1024 (NIST Level 5)",
-            "dilithium" = "Dilithium-5 (NIST Level 5)",
-            "sphincs" = "SPHINCS+-SHAKE256-256s-simple"
-        );
+        info!("✅ Post-Quantum Cryptography initialized (algorithms corresponding to FIPS 203/204/205 - not FIPS-validated modules)");
         
         Ok(pqc)
     }
@@ -121,7 +119,7 @@ impl PostQuantumCrypto {
     async fn generate_sphincs_keypair(&mut self) -> Result<(), anyhow::Error> {
         info!("🔑 Generating SPHINCS+-SHAKE256 key pair");
         
-        let (public_key, secret_key) = sphincsshake256256ssimple::keypair();
+        let (public_key, secret_key) = sphincsshake256ssimple::keypair();
         
         self.sphincs_public_key = Some(public_key);
         self.sphincs_secret_key = Some(secret_key);
@@ -146,7 +144,13 @@ impl PostQuantumCrypto {
         let (ciphertext, shared_secret) = kyber1024::encapsulate(public_key);
         
         // Use shared secret for symmetric encryption
-        let encrypted_data = self.symmetric_encrypt(plaintext, &shared_secret)?;
+        // Derive proper AEAD key using HKDF
+        let hk = Hkdf::<Sha256>::new(None, shared_secret.as_bytes());
+        let mut aead_key = [0u8; 32];
+        hk.expand(b"payment-encryption-v1", &mut aead_key)
+            .map_err(|e| anyhow::anyhow!("HKDF expand failed: {}", e))?;
+        
+        let encrypted_data = self.symmetric_encrypt(plaintext, &aead_key)?;
         
         // Sign the encrypted payload for integrity
         let signature = self.sign_with_dilithium(&encrypted_data).await?;
@@ -160,10 +164,7 @@ impl PostQuantumCrypto {
             nist_level: 5, // Kyber-1024 provides NIST Level 5 security
         };
         
-        info!("✅ Payment data encrypted with quantum-resistant cryptography",
-            "payload_size" = payload.ciphertext.len(),
-            "nist_level" = payload.nist_level
-        );
+        info!("✅ Payment data encrypted with Kyber-1024 (corresponds to FIPS 203 ML-KEM)");
         
         Ok(payload)
     }
@@ -196,7 +197,13 @@ impl PostQuantumCrypto {
         }
         
         // Decrypt using shared secret
-        let plaintext = self.symmetric_decrypt(&payload.ciphertext, &shared_secret)?;
+        // Derive proper AEAD key using HKDF (same as encryption)
+        let hk = Hkdf::<Sha256>::new(None, shared_secret.as_bytes());
+        let mut aead_key = [0u8; 32];
+        hk.expand(b"payment-encryption-v1", &mut aead_key)
+            .map_err(|e| anyhow::anyhow!("HKDF expand failed: {}", e))?;
+        
+        let plaintext = self.symmetric_decrypt(&payload.ciphertext, &aead_key)?;
         
         info!("✅ Payment data decrypted successfully");
         Ok(plaintext)
@@ -228,9 +235,7 @@ impl PostQuantumCrypto {
             nist_category: "signature".to_string(),
         };
         
-        info!("✅ Dilithium-5 signature generated",
-            "signature_size" = quantum_signature.signature.len()
-        );
+        info!("✅ Dilithium-5 signature generated (corresponds to FIPS 204 ML-DSA)");
         
         Ok(quantum_signature)
     }
@@ -269,7 +274,7 @@ impl PostQuantumCrypto {
             .ok_or_else(|| anyhow::anyhow!("No SPHINCS+ public key available"))?;
         
         // Sign the data
-        let signature = sphincsshake256256ssimple::detached_sign(data, secret_key);
+        let signature = sphincsshake256ssimple::detached_sign(data, secret_key);
         
         // Create metadata
         let public_key_hash = self.hash_public_key(public_key.as_bytes())?;
@@ -284,9 +289,7 @@ impl PostQuantumCrypto {
             nist_category: "hash-based".to_string(),
         };
         
-        info!("✅ SPHINCS+ signature generated",
-            "signature_size" = quantum_signature.signature.len()
-        );
+        info!("✅ SPHINCS+ signature generated (corresponds to FIPS 205 SLH-DSA)");
         
         Ok(quantum_signature)
     }

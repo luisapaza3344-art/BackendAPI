@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Financial Security Team"]
 license = "CC0-1.0"
-description = "FIPS 140-3 compliant payment gateway with multi-provider support"
+description = "Post-quantum cryptography payment gateway implementing algorithms corresponding to FIPS 203/204/205"
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
@@ -31,6 +31,7 @@ sha3 = "0.10"
 blake3 = "1.5"
 argon2 = "0.5"
 aes-gcm = "0.10"
+hkdf = "0.12"
 
 # Zero-Knowledge Proofs and Advanced Cryptography for Financial-Grade Security
 ark-groth16 = "0.4"
@@ -44,6 +45,7 @@ ark-serialize = "0.4"
 pqcrypto-kyber = "0.8"
 pqcrypto-dilithium = "0.5"
 pqcrypto-sphincsplus = "0.7"
+pqcrypto-traits = "0.3"
 
 # Payment provider SDKs - using compatible versions for financial security
 # stripe = { version = "0.27", features = ["async"] } # Latest version not available, using HTTP client
