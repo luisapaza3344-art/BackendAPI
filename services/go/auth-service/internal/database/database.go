@@ -79,21 +79,39 @@ func NewFIPSDatabase(cfg *config.DatabaseConfig) (*FIPSDatabase, error) {
                 config: cfg,
         }
 
-        // Auto-migrate schemas with FIPS compliance
-        if err := fipsDB.autoMigrate(); err != nil {
-                return nil, fmt.Errorf("auto-migration failed: %w", err)
+        // Run production-ready GORM migrations with advisory locking
+        if err := fipsDB.runProductionMigrations(); err != nil {
+                return nil, fmt.Errorf("migration failed: %w", err)
         }
 
         logger.Info("✅ FIPS database connection established successfully")
         return fipsDB, nil
 }
 
-// autoMigrate creates/updates database schema with FIPS compliance
-func (f *FIPSDatabase) autoMigrate() error {
-        f.logger.Info("🔄 Running FIPS-compliant database migrations")
+// runProductionMigrations runs production-ready GORM migrations with advisory locking
+func (f *FIPSDatabase) runProductionMigrations() error {
+        f.logger.Info("🔒 Acquiring migration advisory lock for FIPS-compliant migrations")
 
-        // Auto-migrate all models
-        err := f.db.AutoMigrate(
+        // Acquire advisory lock to prevent concurrent migrations
+        locked, err := f.acquireAdvisoryLock(1234567890)
+        if err != nil {
+                return fmt.Errorf("failed to acquire advisory lock: %w", err)
+        }
+        if !locked {
+                return fmt.Errorf("another migration process is already running")
+        }
+
+        defer func() {
+                if err := f.releaseAdvisoryLock(1234567890); err != nil {
+                        f.logger.Error("Failed to release advisory lock", zap.Error(err))
+                }
+                f.logger.Info("🔓 Released migration advisory lock")
+        }()
+
+        f.logger.Info("🔄 Running production-ready FIPS-compliant database migrations")
+
+        // Run GORM AutoMigrate with production safeguards
+        err = f.db.AutoMigrate(
                 &User{},
                 &DIDDocument{},
                 &VerifiableCredential{},
@@ -104,7 +122,7 @@ func (f *FIPSDatabase) autoMigrate() error {
                 &WebAuthnSession{},
         )
         if err != nil {
-                return fmt.Errorf("auto-migration failed: %w", err)
+                return fmt.Errorf("GORM auto-migration failed: %w", err)
         }
 
         // Create indexes for performance and compliance
@@ -113,7 +131,7 @@ func (f *FIPSDatabase) autoMigrate() error {
         }
 
         // Ensure pgcrypto extension is available for audit triggers
-        if err := f.db.Exec("CREATE EXTENSION IF NOT EXISTS pgcrypto").Error; err != nil {
+        if err := f.ensurePgcryptoExtension(); err != nil {
                 return fmt.Errorf("pgcrypto extension setup failed: %w", err)
         }
 
@@ -122,7 +140,7 @@ func (f *FIPSDatabase) autoMigrate() error {
                 return fmt.Errorf("audit trigger setup failed: %w", err)
         }
 
-        f.logger.Info("✅ Database migrations completed successfully")
+        f.logger.Info("✅ Production-ready database migrations completed successfully")
         return nil
 }
 
