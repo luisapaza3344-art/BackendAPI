@@ -23,18 +23,21 @@ mod repository;
 mod service;
 mod middleware;
 mod utils;
+mod metrics;
 
 use crate::{
     handlers::{paypal, stripe, coinbase, payment},
     middleware::{auth::AuthMiddleware, audit::AuditMiddleware},
     service::payment_service::PaymentService,
     utils::crypto::CryptoService,
+    metrics::PaymentMetrics,
 };
 
 #[derive(Clone)]
 pub struct AppState {
     pub payment_service: Arc<PaymentService>,
     pub crypto_service: Arc<CryptoService>,
+    pub metrics: Arc<PaymentMetrics>,
 }
 
 #[derive(Serialize)]
@@ -69,10 +72,12 @@ async fn main() -> anyhow::Result<()> {
     // Initialize services
     let crypto_service = Arc::new(CryptoService::new().await?);
     let payment_service = Arc::new(PaymentService::new().await?);
+    let metrics = Arc::new(PaymentMetrics::new()?);
 
     let app_state = AppState {
         payment_service,
         crypto_service,
+        metrics: metrics.clone(),
     };
 
     // Build application with middleware layers
@@ -96,9 +101,13 @@ async fn main() -> anyhow::Result<()> {
         .with_state(app_state);
 
     // Start metrics endpoint
-    tokio::spawn(async {
+    let metrics_clone = metrics.clone();
+    tokio::spawn(async move {
         let metrics_app = Router::new()
-            .route("/metrics", get(|| async { "TODO: Implement Prometheus metrics" }));
+            .route("/metrics", get(move || {
+                let metrics = metrics_clone.clone();
+                async move { metrics.render_metrics() }
+            }));
         
         let metrics_listener = TcpListener::bind("0.0.0.0:9090").await.unwrap();
         info!("Metrics server listening on http://0.0.0.0:9090");

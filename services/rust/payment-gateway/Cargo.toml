@@ -57,8 +57,9 @@ sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "uuid"
 # dotenv = "0.15"
 
 # Monitoring
-# metrics = "0.21"
-# metrics-exporter-prometheus = "0.12"
+metrics = "0.21"
+metrics-exporter-prometheus = "0.12"
+prometheus = "0.13"
 
 # Webhook verification
 hex = "0.4"
