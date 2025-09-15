@@ -9,6 +9,50 @@ use uuid::Uuid;
 use reqwest;
 use crate::{models::payment_request::PaymentRequest, AppState};
 
+/// Safely parse monetary amounts from string to integer cents
+/// Avoids floating point precision issues for financial calculations
+fn parse_money_to_cents(amount_str: &str) -> anyhow::Result<u64> {
+    // Remove whitespace and validate input
+    let cleaned = amount_str.trim();
+    if cleaned.is_empty() {
+        return Err(anyhow::anyhow!("Empty amount string"));
+    }
+    
+    // Check for decimal point
+    if let Some(decimal_pos) = cleaned.find('.') {
+        let integer_part = &cleaned[..decimal_pos];
+        let decimal_part = &cleaned[decimal_pos + 1..];
+        
+        // Validate decimal part has at most 2 digits
+        if decimal_part.len() > 2 {
+            return Err(anyhow::anyhow!("Too many decimal places for currency"));
+        }
+        
+        // Parse integer part
+        let dollars = integer_part.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid integer part: {}", integer_part))?;
+        
+        // Parse decimal part and pad to 2 digits
+        let cents_str = format!("{:0<2}", decimal_part);
+        let cents = cents_str.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid decimal part: {}", decimal_part))?;
+        
+        // Calculate total cents with overflow check
+        dollars
+            .checked_mul(100)
+            .and_then(|d| d.checked_add(cents))
+            .ok_or_else(|| anyhow::anyhow!("Amount too large"))
+    } else {
+        // No decimal point, treat as whole dollars
+        let dollars = cleaned.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid amount: {}", cleaned))?;
+        
+        dollars
+            .checked_mul(100)
+            .ok_or_else(|| anyhow::anyhow!("Amount too large"))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct PayPalPaymentRequest {
     pub amount: String, // PayPal uses string amounts
@@ -24,9 +68,9 @@ pub struct PayPalPaymentRequest {
 #[derive(Debug, Deserialize)]
 pub struct PayPalPaymentSource {
     #[serde(rename = "type")]
-    pub source_type: String, // "paypal", "card", "venmo", "apple_pay", "google_pay"
+    pub source_type: String, // "paypal", "venmo", "apple_pay", "google_pay" - NO RAW CARDS ALLOWED
     pub paypal: Option<PayPalWallet>,
-    pub card: Option<PayPalCard>,
+    pub card_token: Option<PayPalCardToken>, // Only accept pre-tokenized cards
 }
 
 #[derive(Debug, Deserialize)]
@@ -36,11 +80,12 @@ pub struct PayPalWallet {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct PayPalCard {
-    pub number: String, // Will be tokenized immediately
-    pub expiry: String,
-    pub security_code: String,
+pub struct PayPalCardToken {
+    pub token_id: String, // Pre-tokenized card reference from client-side tokenization
+    pub last_four: String, // Only last 4 digits for display purposes
+    pub card_type: String, // "visa", "mastercard", etc.
     pub billing_address: Option<PayPalAddress>,
+    // PCI-DSS COMPLIANCE: NO RAW CARD DATA ALLOWED ON SERVER
 }
 
 #[derive(Debug, Deserialize)]
@@ -84,6 +129,10 @@ pub struct PayPalWebhookPayload {
     pub resource_type: String,
     pub resource: serde_json::Value,
     pub create_time: String,
+    pub event_version: Option<String>,
+    pub summary: Option<String>,
+    // Additional fields for enhanced security validation
+    pub links: Option<Vec<serde_json::Value>>,
 }
 
 /// Process PayPal payment with PSD3/SCA2 compliance
@@ -119,22 +168,31 @@ pub async fn process_payment(
         }
     }
 
-    // Tokenize card data immediately if present (PCI-DSS compliance)
-    if let Some(card) = &payload.payment_source.card {
-        if !validate_card_number(&card.number) {
-            warn!("Invalid card number format");
+    // PCI-DSS COMPLIANCE: Reject any request with raw card data
+    // Only accept pre-tokenized payment methods from client-side tokenization
+    if payload.payment_source.source_type == "card" {
+        if payload.payment_source.card_token.is_none() {
+            error!("❌ PCI-DSS VIOLATION: Raw card data not permitted on server");
             return Err(StatusCode::BAD_REQUEST);
         }
-        // TODO: Implement PCI-DSS tokenization vault
-        info!("🔐 Card data tokenized for PCI-DSS compliance");
+        info!("✅ Using pre-tokenized card payment method");
     }
+
+    // Parse amount with precision-safe parsing
+    let amount_cents = match parse_money_to_cents(&payload.amount) {
+        Ok(amount) => amount,
+        Err(e) => {
+            error!("❌ Invalid amount format: {} - {}", payload.amount, e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
 
     // Create payment request with GDPR compliance markers
     let payment_id = Uuid::new_v4();
     let payment_request = PaymentRequest {
         id: payment_id,
         provider: "paypal".to_string(),
-        amount: payload.amount.parse::<f64>().unwrap_or(0.0) as u64 * 100, // Convert to cents
+        amount: amount_cents,
         currency: payload.currency.clone(),
         customer_id: payload.custom_id.clone(),
         metadata: Some(serde_json::json!({
@@ -307,11 +365,11 @@ fn create_paypal_payment_source(source: &PayPalPaymentSource) -> serde_json::Val
             }
         }),
         "card" => {
-            if let Some(_card) = &source.card {
-                // For production, implement PCI-DSS tokenization
+            if let Some(card_token) = &source.card_token {
+                // PCI-DSS COMPLIANT: Use only pre-tokenized card references
                 serde_json::json!({
                     "card": {
-                        "vault_id": "tokenized_card_id", // Replace with actual tokenization
+                        "vault_id": card_token.token_id,
                         "stored_credential": {
                             "payment_initiator": "CUSTOMER",
                             "payment_type": "ONE_TIME"
@@ -319,6 +377,7 @@ fn create_paypal_payment_source(source: &PayPalPaymentSource) -> serde_json::Val
                     }
                 })
             } else {
+                error!("Card payment source missing token_id");
                 serde_json::json!({})
             }
         },
@@ -337,7 +396,7 @@ pub async fn handle_webhook(
 ) -> Result<StatusCode, StatusCode> {
     info!("Received PayPal webhook");
 
-    // Verify webhook signature (PayPal uses custom headers)
+    // Extract PayPal webhook headers for enhanced security validation
     let paypal_auth_algo = headers
         .get("PAYPAL-AUTH-ALGO")
         .and_then(|v| v.to_str().ok());
@@ -350,6 +409,31 @@ pub async fn handle_webhook(
     let paypal_transmission_sig = headers
         .get("PAYPAL-TRANSMISSION-SIG")
         .and_then(|v| v.to_str().ok());
+    let paypal_transmission_time = headers
+        .get("PAYPAL-TRANSMISSION-TIME")
+        .and_then(|v| v.to_str().ok());
+    
+    // SECURITY: Validate transmission time to prevent replay attacks
+    if let Some(transmission_time) = paypal_transmission_time {
+        if !validate_paypal_transmission_time(transmission_time) {
+            error!("❌ PayPal webhook transmission time validation failed - possible replay attack");
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    } else {
+        error!("❌ PayPal webhook missing transmission time header");
+        return Err(StatusCode::BAD_REQUEST);
+    }
+    
+    // SECURITY: Validate and track webhook ID to prevent duplicate processing
+    if let Some(transmission_id) = paypal_transmission_id {
+        if !validate_and_track_webhook_id(transmission_id, &state).await {
+            error!("❌ PayPal webhook ID already processed or invalid - possible replay attack");
+            return Err(StatusCode::CONFLICT);
+        }
+    } else {
+        error!("❌ PayPal webhook missing transmission ID header");
+        return Err(StatusCode::BAD_REQUEST);
+    }
 
     // Verify PayPal webhook signature with certificate validation
     match state.crypto_service.verify_paypal_signature(
@@ -378,7 +462,21 @@ pub async fn handle_webhook(
 
     info!("Processing PayPal webhook event: {}", webhook_payload.event_type);
 
-    // Process webhook event with GDPR compliance
+    // Store webhook audit trail with enhanced security metadata
+    let webhook_audit = serde_json::json!({
+        "webhook_id": webhook_payload.id,
+        "event_type": webhook_payload.event_type,
+        "transmission_id": paypal_transmission_id,
+        "transmission_time": paypal_transmission_time,
+        "cert_id": paypal_cert_id,
+        "signature_verified": true,
+        "replay_protected": true,
+        "processed_at": chrono::Utc::now().to_rfc3339()
+    });
+    
+    info!("📝 PayPal webhook audit: {}", webhook_audit);
+    
+    // Process webhook event with GDPR compliance and enhanced security
     match webhook_payload.event_type.as_str() {
         "PAYMENT.CAPTURE.COMPLETED" => {
             info!("✅ PayPal payment completed: {}", webhook_payload.id);
@@ -405,30 +503,77 @@ pub async fn handle_webhook(
 }
 
 
-fn validate_card_number(card_number: &str) -> bool {
-    // Basic Luhn algorithm validation for PCI-DSS compliance
-    let digits: Vec<u32> = card_number
-        .chars()
-        .filter_map(|c| c.to_digit(10))
-        .collect();
-    
-    if digits.len() < 13 || digits.len() > 19 {
-        return false;
-    }
+// PCI-DSS COMPLIANCE: Card validation removed from server-side
+// All card validation must occur client-side before tokenization
+// Server only accepts pre-tokenized payment methods
 
-    let checksum: u32 = digits
-        .iter()
-        .rev()
-        .enumerate()
-        .map(|(i, &digit)| {
-            if i % 2 == 1 {
-                let doubled = digit * 2;
-                if doubled > 9 { doubled - 9 } else { doubled }
-            } else {
-                digit
+/// Validates that a card token meets security requirements
+fn validate_card_token(token: &PayPalCardToken) -> bool {
+    // Validate token format and metadata only
+    !token.token_id.is_empty() 
+        && token.last_four.len() == 4 
+        && token.last_four.chars().all(|c| c.is_ascii_digit())
+        && !token.card_type.is_empty()
+}
+
+/// Validate PayPal transmission time to prevent replay attacks
+/// PayPal webhooks must be processed within 5 minutes of transmission
+fn validate_paypal_transmission_time(transmission_time: &str) -> bool {
+    // Parse transmission time (RFC 3339 format)
+    match chrono::DateTime::parse_from_rfc3339(transmission_time) {
+        Ok(webhook_time) => {
+            let current_time = chrono::Utc::now();
+            let time_diff = current_time.signed_duration_since(webhook_time.with_timezone(&chrono::Utc));
+            
+            // Allow 5 minute window for PayPal webhooks (security best practice)
+            let max_age = chrono::Duration::minutes(5);
+            if time_diff > max_age {
+                error!("❌ PayPal webhook too old: {} minutes", time_diff.num_minutes());
+                return false;
             }
-        })
-        .sum();
+            
+            // Reject future timestamps (clock skew protection)
+            if time_diff < chrono::Duration::minutes(-2) {
+                error!("❌ PayPal webhook from future: {} minutes", time_diff.num_minutes());
+                return false;
+            }
+            
+            info!("✅ PayPal webhook transmission time validated: {} minutes old", time_diff.num_minutes());
+            true
+        },
+        Err(e) => {
+            error!("❌ Invalid PayPal transmission time format: {} - {}", transmission_time, e);
+            false
+        }
+    }
+}
 
-    checksum % 10 == 0
+/// Validate and track PayPal webhook ID to prevent duplicate processing
+/// Uses a distributed cache/database to track processed webhook IDs
+async fn validate_and_track_webhook_id(transmission_id: &str, state: &AppState) -> bool {
+    // Check if webhook ID has already been processed
+    match state.payment_service.check_webhook_processed(transmission_id).await {
+        Ok(already_processed) => {
+            if already_processed {
+                error!("❌ PayPal webhook ID already processed: {}", transmission_id);
+                return false;
+            }
+        },
+        Err(e) => {
+            error!("❌ Failed to check webhook ID: {} - {}", transmission_id, e);
+            return false;
+        }
+    }
+    
+    // Mark webhook as processed (with TTL for cleanup)
+    match state.payment_service.mark_webhook_processed(transmission_id, 86400).await { // 24 hour TTL
+        Ok(_) => {
+            info!("✅ PayPal webhook ID tracked: {}", transmission_id);
+            true
+        },
+        Err(e) => {
+            error!("❌ Failed to mark webhook as processed: {} - {}", transmission_id, e);
+            false
+        }
+    }
 }

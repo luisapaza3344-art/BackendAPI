@@ -9,6 +9,50 @@ use uuid::Uuid;
 use reqwest;
 use crate::{models::payment_request::PaymentRequest, AppState};
 
+/// Safely parse monetary amounts from string to integer cents
+/// Avoids floating point precision issues for financial calculations
+fn parse_money_to_cents(amount_str: &str) -> anyhow::Result<u64> {
+    // Remove whitespace and validate input
+    let cleaned = amount_str.trim();
+    if cleaned.is_empty() {
+        return Err(anyhow::anyhow!("Empty amount string"));
+    }
+    
+    // Check for decimal point
+    if let Some(decimal_pos) = cleaned.find('.') {
+        let integer_part = &cleaned[..decimal_pos];
+        let decimal_part = &cleaned[decimal_pos + 1..];
+        
+        // Validate decimal part has at most 2 digits
+        if decimal_part.len() > 2 {
+            return Err(anyhow::anyhow!("Too many decimal places for currency"));
+        }
+        
+        // Parse integer part
+        let dollars = integer_part.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid integer part: {}", integer_part))?;
+        
+        // Parse decimal part and pad to 2 digits
+        let cents_str = format!("{:0<2}", decimal_part);
+        let cents = cents_str.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid decimal part: {}", decimal_part))?;
+        
+        // Calculate total cents with overflow check
+        dollars
+            .checked_mul(100)
+            .and_then(|d| d.checked_add(cents))
+            .ok_or_else(|| anyhow::anyhow!("Amount too large"))
+    } else {
+        // No decimal point, treat as whole dollars
+        let dollars = cleaned.parse::<u64>()
+            .map_err(|_| anyhow::anyhow!("Invalid amount: {}", cleaned))?;
+        
+        dollars
+            .checked_mul(100)
+            .ok_or_else(|| anyhow::anyhow!("Amount too large"))
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct CoinbasePaymentRequest {
     pub name: String, // Charge name
@@ -165,12 +209,21 @@ pub async fn process_payment(
         }
     }
 
+    // Parse amount with precision-safe parsing
+    let amount_cents = match parse_money_to_cents(&payload.local_price.amount) {
+        Ok(amount) => amount,
+        Err(e) => {
+            error!("❌ Invalid amount format: {} - {}", payload.local_price.amount, e);
+            return Err(StatusCode::BAD_REQUEST);
+        }
+    };
+
     // Create payment request with crypto compliance markers
     let payment_id = Uuid::new_v4();
     let payment_request = PaymentRequest {
         id: payment_id,
         provider: "coinbase".to_string(),
-        amount: payload.local_price.amount.parse::<f64>().unwrap_or(0.0) as u64 * 100,
+        amount: amount_cents,
         currency: payload.local_price.currency.clone(),
         customer_id: payload.customer_info.as_ref().map(|c| c.customer_id.clone()),
         metadata: Some(serde_json::json!({

@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::{HeaderMap, StatusCode, HeaderValue, Method},
     response::Json,
     routing::{get, post},
     Router,
@@ -10,9 +10,10 @@ use std::{net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
 use tower::ServiceBuilder;
 use tower_http::{
-    cors::CorsLayer,
+    cors::{CorsLayer, Any},
     trace::TraceLayer,
     compression::CompressionLayer,
+    set_header::SetResponseHeaderLayer,
 };
 use tracing::{info, warn};
 use uuid::Uuid;
@@ -59,6 +60,93 @@ async fn health_check() -> Json<HealthResponse> {
     })
 }
 
+/// Validate metrics endpoint access with multiple authentication methods
+/// Implements defense-in-depth security for sensitive operational metrics
+fn validate_metrics_access(headers: &HeaderMap) -> bool {
+    // Method 1: API Key authentication
+    if let Some(api_key) = headers.get("X-Metrics-API-Key").and_then(|v| v.to_str().ok()) {
+        let expected_key = std::env::var("METRICS_API_KEY").unwrap_or_default();
+        if !expected_key.is_empty() && api_key == expected_key {
+            info!("✅ Metrics access authorized via API key");
+            return true;
+        }
+    }
+    
+    // Method 2: Bearer token authentication
+    if let Some(auth_header) = headers.get("Authorization").and_then(|v| v.to_str().ok()) {
+        if auth_header.starts_with("Bearer ") {
+            let token = &auth_header[7..];
+            let expected_token = std::env::var("METRICS_BEARER_TOKEN").unwrap_or_default();
+            if !expected_token.is_empty() && token == expected_token {
+                info!("✅ Metrics access authorized via Bearer token");
+                return true;
+            }
+        }
+    }
+    
+    // Method 3: Internal service authentication (for monitoring systems)
+    if let Some(service_token) = headers.get("X-Internal-Service").and_then(|v| v.to_str().ok()) {
+        let expected_service_token = std::env::var("INTERNAL_METRICS_TOKEN").unwrap_or_default();
+        if !expected_service_token.is_empty() && service_token == expected_service_token {
+            info!("✅ Metrics access authorized via internal service token");
+            return true;
+        }
+    }
+    
+    // Development mode: Allow localhost without authentication (only if explicitly enabled)
+    if std::env::var("METRICS_ALLOW_LOCALHOST").unwrap_or_default() == "true" {
+        if let Some(forwarded_for) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
+            if forwarded_for.starts_with("127.0.0.1") || forwarded_for.starts_with("::1") {
+                warn!("⚠️ Metrics access allowed for localhost (development mode)");
+                return true;
+            }
+        }
+    }
+    
+    error!("❌ Metrics access denied - no valid authentication provided");
+    false
+}
+
+fn create_production_cors() -> CorsLayer {
+    // Production CORS configuration for financial-grade security
+    let allowed_origins = if std::env::var("ENVIRONMENT").unwrap_or_else(|_| "development".to_string()) == "production" {
+        // Production: only allow specific trusted domains
+        vec![
+            "https://your-frontend.com".parse::<HeaderValue>().unwrap(),
+            "https://admin.your-frontend.com".parse::<HeaderValue>().unwrap(),
+            "https://api.your-domain.com".parse::<HeaderValue>().unwrap(),
+        ]
+    } else {
+        // Development: allow localhost for testing
+        vec![
+            "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+            "http://localhost:3001".parse::<HeaderValue>().unwrap(),
+            "http://127.0.0.1:3000".parse::<HeaderValue>().unwrap(),
+        ]
+    };
+    
+    CorsLayer::new()
+        .allow_origin(allowed_origins)
+        .allow_methods([
+            Method::GET,
+            Method::POST,
+            Method::OPTIONS, // Required for preflight requests
+        ])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+            axum::http::header::ACCEPT,
+            "X-API-Key".parse::<axum::http::HeaderName>().unwrap(),
+            "X-Request-ID".parse::<axum::http::HeaderName>().unwrap(),
+        ])
+        .expose_headers([
+            "X-Request-ID".parse::<axum::http::HeaderName>().unwrap(),
+            "X-Rate-Limit-Remaining".parse::<axum::http::HeaderName>().unwrap(),
+        ])
+        .allow_credentials(true) // Required for authenticated requests
+        .max_age(std::time::Duration::from_secs(300)) // 5 minutes
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize tracing
@@ -94,23 +182,81 @@ async fn main() -> anyhow::Result<()> {
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
                 .layer(CompressionLayer::new())
-                .layer(CorsLayer::permissive()) // TODO: Configure for production
+                // Production CORS configuration
+                .layer(create_production_cors())
+                // Security headers for PCI-DSS compliance
+                .layer(SetResponseHeaderLayer::overriding(
+                    axum::http::header::STRICT_TRANSPORT_SECURITY,
+                    HeaderValue::from_static("max-age=31536000; includeSubDomains; preload")
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    axum::http::header::X_CONTENT_TYPE_OPTIONS,
+                    HeaderValue::from_static("nosniff")
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    axum::http::header::X_FRAME_OPTIONS,
+                    HeaderValue::from_static("DENY")
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    "X-XSS-Protection".parse::<axum::http::HeaderName>().unwrap(),
+                    HeaderValue::from_static("1; mode=block")
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    "Referrer-Policy".parse::<axum::http::HeaderName>().unwrap(),
+                    HeaderValue::from_static("strict-origin-when-cross-origin")
+                ))
+                .layer(SetResponseHeaderLayer::overriding(
+                    "Content-Security-Policy".parse::<axum::http::HeaderName>().unwrap(),
+                    HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
+                ))
+                // Authentication and audit middleware
                 .layer(AuthMiddleware::new())
                 .layer(AuditMiddleware::new()),
         )
         .with_state(app_state);
 
-    // Start metrics endpoint
+    // Start SECURED metrics endpoint with authentication
     let metrics_clone = metrics.clone();
     tokio::spawn(async move {
         let metrics_app = Router::new()
-            .route("/metrics", get(move || {
+            .route("/metrics", get(move |headers: HeaderMap| {
                 let metrics = metrics_clone.clone();
-                async move { metrics.render_metrics() }
-            }));
+                async move { 
+                    // SECURITY: Validate metrics access authentication
+                    if !validate_metrics_access(&headers) {
+                        error!("❌ Unauthorized metrics access attempt");
+                        return Err(StatusCode::UNAUTHORIZED);
+                    }
+                    
+                    info!("✅ Authorized metrics access");
+                    Ok(metrics.render_metrics())
+                }
+            }))
+            .layer(
+                ServiceBuilder::new()
+                    .layer(TraceLayer::new_for_http())
+                    // Security headers for metrics endpoint
+                    .layer(SetResponseHeaderLayer::overriding(
+                        axum::http::header::STRICT_TRANSPORT_SECURITY,
+                        HeaderValue::from_static("max-age=31536000; includeSubDomains; preload")
+                    ))
+                    .layer(SetResponseHeaderLayer::overriding(
+                        axum::http::header::X_CONTENT_TYPE_OPTIONS,
+                        HeaderValue::from_static("nosniff")
+                    ))
+                    .layer(SetResponseHeaderLayer::overriding(
+                        axum::http::header::X_FRAME_OPTIONS,
+                        HeaderValue::from_static("DENY")
+                    ))
+                    .layer(SetResponseHeaderLayer::overriding(
+                        "Cache-Control".parse::<axum::http::HeaderName>().unwrap(),
+                        HeaderValue::from_static("no-cache, no-store, must-revalidate")
+                    ))
+            );
         
-        let metrics_listener = TcpListener::bind("0.0.0.0:9090").await.unwrap();
-        info!("Metrics server listening on http://0.0.0.0:9090");
+        // Bind to localhost only for security (not 0.0.0.0)
+        let metrics_listener = TcpListener::bind("127.0.0.1:9090").await.unwrap();
+        info!("🔒 SECURED Metrics server listening on http://127.0.0.1:9090 (localhost only)");
         axum::serve(metrics_listener, metrics_app).await.unwrap();
     });
 
