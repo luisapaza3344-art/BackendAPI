@@ -112,7 +112,6 @@ pub struct StripeWebhookPayload {
 /// - HSM-based key management with FIPS 140-3 Level 3 compliance
 /// - Immutable audit logging with blockchain anchoring
 /// - Real-time anomaly detection and risk assessment
-#[axum::debug_handler(state = AppState)]
 pub async fn process_payment(
     State(state): State<AppState>,
     Json(payload): Json<StripePaymentRequest>,

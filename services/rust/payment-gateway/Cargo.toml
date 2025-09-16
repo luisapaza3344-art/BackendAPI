@@ -56,7 +56,7 @@ ark-relations = "0.4"
 ark-snark = "0.4"
 
 # Post-Quantum Cryptography (NIST Standards)
-pqcrypto-kyber = "0.8"
+pqcrypto-kyber = { version = "0.8", optional = true }
 pqcrypto-dilithium = { version = "0.5", default-features = false, optional = true }
 pqcrypto-sphincsplus = { version = "0.7", default-features = false, optional = true }
 pqcrypto-traits = "0.3"
@@ -110,11 +110,11 @@ openssl = { version = "0.10", features = ["vendored"], optional = true }
 procfs = "0.16"
 
 # Enterprise AI/ML Libraries for Advanced Fraud Detection
-smartcore = "0.3"
-linfa = "0.7"
-linfa-trees = "0.7"
-linfa-clustering = "0.7"
-linfa-nn = "0.7"
+smartcore = { version = "0.3", optional = true }
+linfa = { version = "0.7", optional = true }
+linfa-trees = { version = "0.7", optional = true }
+linfa-clustering = { version = "0.7", optional = true }
+linfa-nn = { version = "0.7", optional = true }
 candle-core = { version = "0.4", optional = true }
 candle-nn = { version = "0.4", optional = true }
 candle-transformers = { version = "0.4", optional = true }
@@ -131,7 +131,7 @@ ndarray-stats = "0.5"
 chrono-tz = "0.8"
 
 # Enterprise Alerting & Notification Systems
-slack-hook = "0.9.1"
+slack-hook = { version = "0.9.1", optional = true }
 teloxide = { version = "0.12", optional = true }
 lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
 
@@ -149,8 +149,8 @@ envy = "0.4"
 dotenv = "0.15"
 
 # Enhanced HTTP Client for External Services
-reqwest-middleware = "0.2"
-reqwest-retry = "0.4"
+reqwest-middleware = { version = "0.2", default-features = false, optional = true }
+reqwest-retry = { version = "0.4", default-features = false, optional = true }
 
 # IP Geolocation and Reputation Services
 geoip2 = "0.1.7"
@@ -179,9 +179,14 @@ lru = "0.12"
 
 [features]
 default = ["ml-minimal", "pq-dilithium"]
-ml-full = ["dep:tch", "ml-candle"]
+ml-full = ["dep:tch", "ml-candle", "dep:smartcore", "dep:linfa", "dep:linfa-trees", "dep:linfa-clustering", "dep:linfa-nn"]
 ml-candle = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
 ml-minimal = []
+minimal-build = []
+stripe-only = []
+alerts = ["dep:slack-hook"]
+http-retries = ["dep:reqwest-middleware", "dep:reqwest-retry"]
+pq-kyber = ["pqcrypto-kyber"]
 pq-dilithium = ["pqcrypto-dilithium"]
 pq-sphincs = ["pqcrypto-sphincsplus"]
 openssl-fips = ["dep:openssl"]

@@ -31,13 +31,13 @@ args = "Auth Service"
 name = "Payment Gateway"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd services/rust/payment-gateway && cargo run"
-waitForPort = 8080
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/rust/payment-gateway && CARGO_BUILD_JOBS=2 cargo run --no-default-features --features \"ml-minimal pq-dilithium\" --bin payment-gateway"
+waitForPort = 8080
 
 [[workflows.workflow]]
 name = "Crypto Attestation Agent"
@@ -82,10 +82,6 @@ externalPort = 8000
 [[ports]]
 localPort = 8080
 externalPort = 8080
-
-[[ports]]
-localPort = 8099
-externalPort = 8099
 
 [[ports]]
 localPort = 9000
