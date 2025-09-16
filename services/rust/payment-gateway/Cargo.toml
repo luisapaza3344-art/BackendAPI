@@ -109,13 +109,81 @@ openssl = { version = "0.10", features = ["vendored"], optional = true }
 # System information for FIPS kernel checks
 procfs = "0.16"
 
+# Enterprise AI/ML Libraries for Advanced Fraud Detection
+smartcore = "0.3"
+linfa = "0.7"
+linfa-trees = "0.7"
+linfa-clustering = "0.7"
+linfa-nn = "0.7"
+candle-core = { version = "0.4", optional = true }
+candle-nn = { version = "0.4", optional = true }
+candle-transformers = { version = "0.4", optional = true }
+tch = { version = "0.15", optional = true }
+
+# Advanced Statistical Analysis
+statrs = "0.16"
+rustfft = "6.0"
+nalgebra = "0.32"
+ndarray = "0.15"
+ndarray-stats = "0.5"
+
+# Enterprise Time-Series Analysis
+chrono-tz = "0.8"
+
+# Enterprise Alerting & Notification Systems
+slack-hook = "0.9.1"
+teloxide = { version = "0.12", optional = true }
+lettre = { version = "0.11", default-features = false, features = ["tokio1-rustls-tls", "builder", "smtp-transport"] }
+
+# Real-time Analytics and Streaming
+lru_time_cache = "0.11"
+flashmap = "0.0.4-alpha"
+parking_lot = "0.12"
+tokio-stream = "0.1"
+futures = "0.3"
+futures-util = "0.3"
+
+# Enterprise Configuration Management
+config = "0.14"
+envy = "0.4"
+dotenv = "0.15"
+
+# Enhanced HTTP Client for External Services
+reqwest-middleware = "0.2"
+reqwest-retry = "0.4"
+
+# IP Geolocation and Reputation Services
+geoip2 = "0.1.7"
+maxminddb = "0.24"
+
+# Advanced JSON Processing
+serde_with = "3.0"
+serde_repr = "0.1"
+
+# Enterprise Logging and Audit
+tracing-appender = "0.2"
+tracing-bunyan-formatter = "0.3"
+
+# Concurrent Data Structures for High-Performance
+dashmap = "5.5"
+once_cell = "1.19"
+arc-swap = "1.6"
+
+# Advanced Error Handling
+color-eyre = "0.6"
+miette = { version = "5.0", features = ["fancy"] }
+
 # PCI-DSS tokenization and caching
 base64 = "0.21"
 lru = "0.12"
 
 [features]
-default = []
+default = ["ml-minimal"]
+ml-full = ["dep:tch", "ml-candle"]
+ml-candle = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
+ml-minimal = []
 openssl-fips = ["dep:openssl"]
+telegram-alerts = ["dep:teloxide"]
 
 [dev-dependencies]
 tokio-test = "0.4"
