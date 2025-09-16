@@ -6,6 +6,49 @@ use chrono::{DateTime, Utc, Duration, Timelike};
 use std::collections::HashMap;
 use crate::models::payment_request::PaymentRequest;
 
+/// Parse monetary amounts from string to integer cents
+/// Avoids floating point precision issues for financial calculations
+fn parse_amount_to_cents(amount_str: &str) -> Result<u64> {
+    let cleaned = amount_str.trim();
+    if cleaned.is_empty() {
+        return Err(anyhow!("Empty amount string"));
+    }
+    
+    // Check for decimal point
+    if let Some(decimal_pos) = cleaned.find('.') {
+        let integer_part = &cleaned[..decimal_pos];
+        let decimal_part = &cleaned[decimal_pos + 1..];
+        
+        // Validate decimal part has at most 2 digits
+        if decimal_part.len() > 2 {
+            return Err(anyhow!("Too many decimal places for currency"));
+        }
+        
+        // Parse integer part
+        let dollars = integer_part.parse::<u64>()
+            .map_err(|_| anyhow!("Invalid integer part: {}", integer_part))?;
+        
+        // Parse decimal part and pad to 2 digits
+        let cents_str = format!("{:0<2}", decimal_part);
+        let cents = cents_str.parse::<u64>()
+            .map_err(|_| anyhow!("Invalid decimal part: {}", decimal_part))?;
+        
+        // Calculate total cents with overflow check
+        dollars
+            .checked_mul(100)
+            .and_then(|d| d.checked_add(cents))
+            .ok_or_else(|| anyhow!("Amount too large"))
+    } else {
+        // No decimal point, treat as whole dollars
+        let dollars = cleaned.parse::<u64>()
+            .map_err(|_| anyhow!("Invalid amount: {}", cleaned))?;
+        
+        dollars
+            .checked_mul(100)
+            .ok_or_else(|| anyhow!("Amount too large"))
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FraudAnalysisResult {
     pub risk_score: f64, // 0.0 = no risk, 1.0 = maximum risk
@@ -507,6 +550,35 @@ impl EnterpriseAIFraudDetector {
         };
         
         Ok(updated_profile)
+    }
+
+    /// Analyze payment request from JSON context (used by PayPal handler)
+    /// 
+    /// This method converts the JSON context into a PaymentRequest and calls the main analysis
+    pub async fn analyze_payment_request(&self, context: &serde_json::Value) -> Result<FraudAnalysisResult> {
+        info!("🛡️ Analyzing payment request from context");
+        
+        // Extract payment data from context
+        let payment_data = &context["payment_data"];
+        let request_context = &context["request_context"];
+        
+        // Parse amount (handle both string and numeric values)
+        let amount_str = payment_data["amount"].as_str().unwrap_or("0");
+        let amount_cents = parse_amount_to_cents(amount_str).unwrap_or(0);
+        
+        // Create a PaymentRequest from the context data
+        let payment_request = PaymentRequest {
+            id: Uuid::new_v4(),
+            provider: "paypal".to_string(),
+            amount: amount_cents,
+            currency: payment_data["currency"].as_str().unwrap_or("USD").to_string(),
+            customer_id: payment_data["custom_id"].as_str().map(|s| s.to_string()),
+            metadata: Some(context.clone()),
+            created_at: chrono::Utc::now(),
+        };
+        
+        // Run the full fraud analysis
+        self.analyze_payment_for_fraud(&payment_request, None, Some(context.clone())).await
     }
 }
 
