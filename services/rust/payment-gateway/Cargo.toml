@@ -8,7 +8,7 @@ description = "Post-quantum cryptography payment gateway implementing algorithms
 
 [dependencies]
 tokio = { version = "1.35", features = ["full"] }
-axum = { version = "0.7", features = ["json", "tower-log"] }
+axum = { version = "0.7", features = ["json", "tower-log", "macros"] }
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tower = { version = "0.4", features = ["full"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "compression-br", "set-header"] }
@@ -57,8 +57,8 @@ ark-snark = "0.4"
 
 # Post-Quantum Cryptography (NIST Standards)
 pqcrypto-kyber = "0.8"
-pqcrypto-dilithium = "0.5"
-pqcrypto-sphincsplus = "0.7"
+pqcrypto-dilithium = { version = "0.5", default-features = false, optional = true }
+pqcrypto-sphincsplus = { version = "0.7", default-features = false, optional = true }
 pqcrypto-traits = "0.3"
 
 # Payment provider SDKs - using compatible versions for financial security
@@ -178,10 +178,12 @@ base64 = "0.21"
 lru = "0.12"
 
 [features]
-default = ["ml-minimal"]
+default = ["ml-minimal", "pq-dilithium"]
 ml-full = ["dep:tch", "ml-candle"]
 ml-candle = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
 ml-minimal = []
+pq-dilithium = ["pqcrypto-dilithium"]
+pq-sphincs = ["pqcrypto-sphincsplus"]
 openssl-fips = ["dep:openssl"]
 telegram-alerts = ["dep:teloxide"]
 

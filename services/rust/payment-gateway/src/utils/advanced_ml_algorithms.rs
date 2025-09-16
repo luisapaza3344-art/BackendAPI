@@ -39,7 +39,8 @@ use smartcore::linalg::basic::matrix::DenseMatrix;
 use smartcore::linalg::basic::arrays::Array;
 
 // Statistical and mathematical libraries
-use nalgebra::{DVector, DMatrix, SVD};
+use nalgebra::{DVector, DMatrix};
+use nalgebra::linalg::SVD;
 use ndarray::{Array1, Array2, ArrayBase, Dim};
 use statrs::distribution::{Normal, Continuous, Poisson, Beta, ContinuousCDF};
 use statrs::statistics::{Statistics, OrderStatistics};

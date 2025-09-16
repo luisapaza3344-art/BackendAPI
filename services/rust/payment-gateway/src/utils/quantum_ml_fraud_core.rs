@@ -322,7 +322,7 @@ impl QuantumMLFraudCore {
         let (dilithium_pk, dilithium_sk) = keypair();
         {
             let mut keys = self.dilithium_keypair.lock();
-            *keys = Some((dilithium_pk, dilithium_sk));
+            *keys = Some((Box::new(dilithium_pk), Box::new(dilithium_sk)));
         }
         
         // Generate SPHINCS+ keypair (temporarily disabled)

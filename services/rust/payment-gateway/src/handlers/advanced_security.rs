@@ -11,7 +11,7 @@ use chrono::{DateTime, Utc};
 
 use crate::{
     AppState,
-    crypto::{PublicPaymentData, PrivatePaymentData, QuantumSignature},
+    crypto::{PublicPaymentData, QuantumSignature},
 };
 
 /// Public verification endpoint for Zero-Knowledge Proofs

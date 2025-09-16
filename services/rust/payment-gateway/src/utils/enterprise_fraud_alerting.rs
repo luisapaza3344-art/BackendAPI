@@ -27,7 +27,7 @@ use crate::models::payment_request::PaymentRequest;
 use crate::utils::{
     quantum_ml_fraud_core::{QuantumMLFraudResult, EnterpriseRiskLevel, EnterpriseAction},
     redis_fraud_scoring::RealTimeFraudScore,
-    advanced_ml_algorithms::AdvancedMLFraudPrediction,
+    AdvancedMLFraudPrediction,
 };
 
 /// Global enterprise fraud alerting service

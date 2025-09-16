@@ -3,6 +3,7 @@ use tracing::{info, error, warn};
 use pqcrypto_traits::sign::{PublicKey as PQSignPublicKey, SecretKey as PQSignSecretKey, DetachedSignature as PQDetachedSignature};
 use pqcrypto_traits::kem::{PublicKey as PQKemPublicKey, SecretKey as PQKemSecretKey, Ciphertext as PQCiphertext};
 use pqcrypto_dilithium::{dilithium5};
+#[cfg(feature = "pq-sphincs")]
 use pqcrypto_sphincsplus::{sphincssha2256ssimple};
 use pqcrypto_kyber::{kyber1024};
 use ring::{digest, hmac};
@@ -380,25 +381,34 @@ impl CryptoService {
         }
         
         // Perform REAL SPHINCS+ signature verification
-        match <sphincssha2256ssimple::PublicKey as PQSignPublicKey>::from_bytes(public_key_bytes) {
-            Ok(public_key) => {
-                let detached_sig = sphincssha2256ssimple::DetachedSignature::from_bytes(signature_bytes)
-                    .map_err(|e| anyhow!("Invalid SPHINCS+ signature format: {:?}", e))?;
-                match sphincssha2256ssimple::verify_detached_signature(&detached_sig, signed_message, &public_key) {
-                    Ok(()) => {
-                        info!("✅ REAL address ZKP proof verified with SPHINCS+");
-                        Ok(true)
-                    }
-                    Err(e) => {
-                        error!("❌ SPHINCS+ signature verification failed: {:?}", e);
-                        Ok(false)
+        #[cfg(feature = "pq-sphincs")]
+        {
+            match <sphincssha2256ssimple::PublicKey as PQSignPublicKey>::from_bytes(public_key_bytes) {
+                Ok(public_key) => {
+                    let detached_sig = sphincssha2256ssimple::DetachedSignature::from_bytes(signature_bytes)
+                        .map_err(|e| anyhow!("Invalid SPHINCS+ signature format: {:?}", e))?;
+                    match sphincssha2256ssimple::verify_detached_signature(&detached_sig, signed_message, &public_key) {
+                        Ok(()) => {
+                            info!("✅ REAL address ZKP proof verified with SPHINCS+");
+                            Ok(true)
+                        }
+                        Err(e) => {
+                            error!("❌ SPHINCS+ signature verification failed: {:?}", e);
+                            Ok(false)
+                        }
                     }
                 }
+                Err(e) => {
+                    error!("❌ Invalid SPHINCS+ public key format: {:?}", e);
+                    Ok(false)
+                }
             }
-            Err(e) => {
-                error!("❌ Invalid SPHINCS+ public key format: {:?}", e);
-                Ok(false)
-            }
+        }
+        
+        #[cfg(not(feature = "pq-sphincs"))]
+        {
+            warn!("⚠️ SPHINCS+ address proof verification requested but pq-sphincs feature disabled - FAILING SAFELY");
+            Ok(false)
         }
     }
 
@@ -963,10 +973,17 @@ impl CryptoService {
     }
     
     /// Test SPHINCS+ (SLH-DSA) availability
+    #[cfg(feature = "pq-sphincs")]
     async fn test_sphincs_availability(&self) -> Result<bool> {
         // Real test of SPHINCS+ algorithm
         let (_pk, _sk) = pqcrypto_sphincsplus::sphincssha2256ssimple::keypair();
         Ok(true)
+    }
+    
+    #[cfg(not(feature = "pq-sphincs"))]
+    async fn test_sphincs_availability(&self) -> Result<bool> {
+        warn!("SPHINCS+ disabled in build - feature pq-sphincs not enabled");
+        Ok(false)
     }
     
     /// Get comprehensive system security status
@@ -1797,6 +1814,7 @@ impl CryptoService {
         message: &[u8],
     ) -> Result<bool> {
         match algorithm {
+            #[cfg(feature = "pq-sphincs")]
             "SPHINCS+-SHAKE256-256s-simple" | "SPHINCS+" => {
                 info!("🔐 REAL SPHINCS+ signature verification using pqcrypto");
                 
@@ -1838,6 +1856,12 @@ impl CryptoService {
                         Ok(false)
                     }
                 }
+            },
+            
+            #[cfg(not(feature = "pq-sphincs"))]
+            "SPHINCS+-SHAKE256-256s-simple" | "SPHINCS+" => {
+                warn!("⚠️ SPHINCS+ signature verification requested but feature pq-sphincs not enabled - FAILING SAFELY");
+                Ok(false)
             },
             
             "Dilithium-5" => {

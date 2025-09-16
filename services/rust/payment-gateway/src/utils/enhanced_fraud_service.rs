@@ -32,9 +32,8 @@ use crate::utils::{
         RealTimeFraudScore, RedisFraudScoringService, REDIS_FRAUD_SCORING,
         initialize_redis_fraud_scoring,
     },
-    advanced_ml_algorithms::{
-        AdvancedMLFraudPrediction, AdvancedMLAlgorithmsService, ADVANCED_ML_SERVICE,
-        initialize_advanced_ml_service, TrainingDataPoint, TransactionHistoryPoint,
+    {
+        AdvancedMLFraudPrediction, ADVANCED_ML_SERVICE, AdvancedMLAlgorithmsService, TransactionHistoryPoint, initialize_advanced_ml_service,
     },
     enterprise_fraud_alerting::{
         FraudAlert, EnterpriseFraudAlertingService, ENTERPRISE_FRAUD_ALERTING,
@@ -602,7 +601,12 @@ impl EnhancedFraudDetectionService {
                 let metadata = request_metadata.cloned();
                 
                 async move {
-                    core.analyze_transaction_for_fraud(&payment, profile.as_ref(), metadata).await
+                    // Wrap non-Send quantum ML operations in spawn_blocking
+                    tokio::task::spawn_blocking(move || {
+                        tokio::runtime::Handle::current().block_on(async {
+                            core.analyze_transaction_for_fraud(&payment, profile.as_ref(), metadata).await
+                        })
+                    }).await.map_err(|e| anyhow!("Quantum ML task failed: {}", e))?
                 }
             }))
         } else {
@@ -616,7 +620,12 @@ impl EnhancedFraudDetectionService {
                 let profile = customer_profile.cloned();
                 
                 async move {
-                    scoring.get_real_time_fraud_score(&payment, profile.as_ref()).await
+                    // Wrap non-Send realtime scoring operations in spawn_blocking
+                    tokio::task::spawn_blocking(move || {
+                        tokio::runtime::Handle::current().block_on(async {
+                            scoring.get_real_time_fraud_score(&payment, profile.as_ref()).await
+                        })
+                    }).await.map_err(|e| anyhow!("Realtime scoring task failed: {}", e))?
                 }
             }))
         } else {
@@ -631,7 +640,12 @@ impl EnhancedFraudDetectionService {
                 let history = transaction_history.map(|h| h.to_vec());
                 
                 async move {
-                    ml_service.predict_fraud_advanced_ml(&payment, profile.as_ref(), history.as_deref()).await
+                    // Wrap non-Send advanced ML operations in spawn_blocking
+                    tokio::task::spawn_blocking(move || {
+                        tokio::runtime::Handle::current().block_on(async {
+                            ml_service.predict_fraud_advanced_ml(&payment, profile.as_ref(), history.as_deref()).await
+                        })
+                    }).await.map_err(|e| anyhow!("Advanced ML task failed: {}", e))?
                 }
             }))
         } else {

@@ -1,7 +1,7 @@
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode, HeaderValue, Method},
-    response::Json,
+    Json,
     routing::{get, post},
     Router,
 };
@@ -347,6 +347,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Build application with middleware layers
     let app = Router::new()
+        .with_state(app_state.clone())
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health_check))
         .route("/v1/payments/stripe", post(stripe::process_payment))
@@ -403,7 +404,7 @@ async fn main() -> anyhow::Result<()> {
                 .layer(from_fn(auth_middleware))
                 .layer(AuditMiddleware::new()),
         )
-        .with_state(app_state);
+;
 
     // Start SECURED metrics endpoint with authentication
     let metrics_clone = metrics.clone();

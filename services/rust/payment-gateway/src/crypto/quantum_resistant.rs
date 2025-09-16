@@ -1,5 +1,6 @@
 use pqcrypto_kyber::kyber1024::{self, PublicKey as KyberPublicKey, SecretKey as KyberSecretKey, Ciphertext};
 use pqcrypto_dilithium::dilithium5::{self, PublicKey as DilithiumPublicKey, SecretKey as DilithiumSecretKey, DetachedSignature};
+#[cfg(feature = "pq-sphincs")]
 use pqcrypto_sphincsplus::sphincsshake256ssimple::{self, PublicKey as SphincsPlusPublicKey, SecretKey as SphincsPlusSecretKey};
 use pqcrypto_traits::kem::{PublicKey as KemPublicKey, SharedSecret as KemSharedSecret, Ciphertext as KemCiphertext};
 use pqcrypto_traits::sign::{PublicKey as SignPublicKey, DetachedSignature as SignDetachedSignature};
@@ -23,7 +24,9 @@ pub struct PostQuantumCrypto {
     dilithium_secret_key: Option<DilithiumSecretKey>,
     
     // SPHINCS+: Stateless Hash-Based Signatures
+    #[cfg(feature = "pq-sphincs")]
     sphincs_public_key: Option<SphincsPlusPublicKey>,
+    #[cfg(feature = "pq-sphincs")]
     sphincs_secret_key: Option<SphincsPlusSecretKey>,
     
     fips_compliant: bool,
@@ -73,7 +76,9 @@ impl PostQuantumCrypto {
             kyber_secret_key: None,
             dilithium_public_key: None,
             dilithium_secret_key: None,
+            #[cfg(feature = "pq-sphincs")]
             sphincs_public_key: None,
+            #[cfg(feature = "pq-sphincs")]
             sphincs_secret_key: None,
             fips_compliant: true,
             algorithm_suite: "NIST-PQC-Suite".to_string(),
@@ -82,6 +87,7 @@ impl PostQuantumCrypto {
         // Generate quantum-resistant key pairs
         pqc.generate_kyber_keypair().await?;
         pqc.generate_dilithium_keypair().await?;
+        #[cfg(feature = "pq-sphincs")]
         pqc.generate_sphincs_keypair().await?;
         
         info!("✅ Post-Quantum Cryptography initialized (algorithms corresponding to FIPS 203/204/205 - not FIPS-validated modules)");
@@ -116,6 +122,7 @@ impl PostQuantumCrypto {
     }
     
     /// Generate SPHINCS+ key pair for stateless hash-based signatures
+    #[cfg(feature = "pq-sphincs")]
     async fn generate_sphincs_keypair(&mut self) -> Result<(), anyhow::Error> {
         info!("🔑 Generating SPHINCS+-SHAKE256 key pair");
         
@@ -125,6 +132,12 @@ impl PostQuantumCrypto {
         self.sphincs_secret_key = Some(secret_key);
         
         info!("✅ SPHINCS+-SHAKE256 key pair generated successfully");
+        Ok(())
+    }
+    
+    #[cfg(not(feature = "pq-sphincs"))]
+    async fn generate_sphincs_keypair(&mut self) -> Result<(), anyhow::Error> {
+        info!("SPHINCS+ disabled - feature pq-sphincs not enabled");
         Ok(())
     }
     
@@ -264,6 +277,7 @@ impl PostQuantumCrypto {
     }
     
     /// Sign with SPHINCS+ hash-based signature (stateless)
+    #[cfg(feature = "pq-sphincs")]
     pub async fn sign_with_sphincs(&self, data: &[u8]) -> Result<QuantumSignature, anyhow::Error> {
         info!("✍️ Signing data with SPHINCS+-SHAKE256 (stateless hash-based)");
         
@@ -292,6 +306,11 @@ impl PostQuantumCrypto {
         info!("✅ SPHINCS+ signature generated (corresponds to FIPS 205 SLH-DSA)");
         
         Ok(quantum_signature)
+    }
+    
+    #[cfg(not(feature = "pq-sphincs"))]
+    pub async fn sign_with_sphincs(&self, _data: &[u8]) -> Result<QuantumSignature, anyhow::Error> {
+        Err(anyhow::anyhow!("SPHINCS+ signing disabled - pq-sphincs feature not enabled"))
     }
     
     /// Symmetric encryption using shared secret from Kyber KEM
@@ -366,7 +385,10 @@ impl PostQuantumCrypto {
         stats.insert("algorithm_suite".to_string(), serde_json::Value::String(self.algorithm_suite.clone()));
         stats.insert("kyber_ready".to_string(), serde_json::Value::Bool(self.kyber_public_key.is_some()));
         stats.insert("dilithium_ready".to_string(), serde_json::Value::Bool(self.dilithium_public_key.is_some()));
+        #[cfg(feature = "pq-sphincs")]
         stats.insert("sphincs_ready".to_string(), serde_json::Value::Bool(self.sphincs_public_key.is_some()));
+        #[cfg(not(feature = "pq-sphincs"))]
+        stats.insert("sphincs_ready".to_string(), serde_json::Value::Bool(false));
         stats.insert("nist_level".to_string(), serde_json::Value::Number(5.into()));
         
         stats
@@ -384,6 +406,7 @@ impl PostQuantumCrypto {
             keys.insert("dilithium-5".to_string(), dilithium_pk.as_bytes().to_vec());
         }
         
+        #[cfg(feature = "pq-sphincs")]
         if let Some(sphincs_pk) = &self.sphincs_public_key {
             keys.insert("sphincs-shake256".to_string(), sphincs_pk.as_bytes().to_vec());
         }
