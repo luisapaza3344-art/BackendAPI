@@ -593,9 +593,11 @@ impl QuantumMLFraudCore {
             let model = self.random_forest_model.lock();
             if let Some(ref rf) = *model {
                 let feature_matrix = DenseMatrix::from_2d_vec(&vec![features.to_vec()]);
-                let prediction: Vec<i32> = rf.predict(&feature_matrix)
-                    .map_err(|e| anyhow!("Random Forest prediction failed: {}", e))?;
-                prediction.get(0).copied().unwrap_or(0) as f64
+                let preds = rf.predict(&feature_matrix)
+                    .map_err(|e| anyhow!("Random Forest prediction failed: {}", e))?
+                    .unwrap_or(vec![0i32]);
+                let y: i32 = *preds.get(0).unwrap_or(&0);
+                y as f64
             } else {
                 0.5 // Default score when model not available
             }
@@ -606,9 +608,11 @@ impl QuantumMLFraudCore {
             let model = self.logistic_model.lock();
             if let Some(ref lr) = *model {
                 let feature_matrix = DenseMatrix::from_2d_vec(&vec![features.to_vec()]);
-                let prediction: Vec<i32> = lr.predict(&feature_matrix)
-                    .map_err(|e| anyhow!("Logistic Regression prediction failed: {}", e))?;
-                prediction.get(0).copied().unwrap_or(0) as f64
+                let preds = lr.predict(&feature_matrix)
+                    .map_err(|e| anyhow!("Logistic Regression prediction failed: {}", e))?
+                    .unwrap_or(vec![0i32]);
+                let y: i32 = *preds.get(0).unwrap_or(&0);
+                y as f64
             } else {
                 0.5
             }
@@ -741,9 +745,10 @@ impl QuantumMLFraudCore {
             let model = self.kmeans_model.lock();
             if let Some(ref kmeans) = *model {
                 let feature_matrix = DenseMatrix::from_2d_vec(&vec![features.to_vec()]);
-                let prediction: Vec<i32> = kmeans.predict(&feature_matrix)
-                    .map_err(|e| anyhow!("Cluster prediction failed: {}", e))?;
-                prediction.get(0).copied().unwrap_or(0)
+                let preds = kmeans.predict(&feature_matrix)
+                    .map_err(|e| anyhow!("Cluster prediction failed: {}", e))?
+                    .unwrap_or(vec![0usize]);
+                preds.get(0).copied().unwrap_or(0) as i32
             } else {
                 0 // Default cluster
             }

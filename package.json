@@ -1,0 +1,20 @@
+{
+  "name": "workspace",
+  "version": "1.0.0",
+  "description": "Enterprise-level payment processing platform with FIPS 140-3 Level 3, PCI-DSS Level 1, and quantum-resistant cryptography.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@stripe/react-stripe-js": "^4.0.2",
+    "@stripe/stripe-js": "^7.9.0",
+    "stripe": "^18.5.0"
+  }
+}

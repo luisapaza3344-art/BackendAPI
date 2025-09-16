@@ -461,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
     info!("✅ Zero-Knowledge Proofs: INITIALIZED");
     info!("✅ PCI-DSS Level 1: COMPLIANT");
 
-    axum::serve(listener, app).await?;
+    axum::serve(listener, app.into_service()).await?;
     
     Ok(())
 }
