@@ -711,6 +711,13 @@ pub async fn process_enterprise_quantum_crypto_payment(
         payload.crypto_payment_type.as_ref().map(|t| &t.payment_flow).unwrap_or(&"standard".to_string())
     );
     
+    // Extract header values in short scope to drop HeaderMap before awaits
+    let (user_agent, x_forwarded_for) = {
+        let user_agent = headers.get("user-agent").and_then(|h| h.to_str().ok()).unwrap_or("unknown").to_string();
+        let x_forwarded_for = headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()).unwrap_or("unknown").to_string();
+        (user_agent, x_forwarded_for)
+    }; // HeaderMap dropped here before any awaits
+    
     let processing_start = std::time::Instant::now();
     let payment_id = Uuid::new_v4();
     
@@ -747,8 +754,8 @@ pub async fn process_enterprise_quantum_crypto_payment(
             "crypto_payment": true,
             "enterprise_quantum": true,
             "request_headers": {
-                "user_agent": headers.get("user-agent").and_then(|h| h.to_str().ok()).unwrap_or("unknown"),
-                "x_forwarded_for": headers.get("x-forwarded-for").and_then(|h| h.to_str().ok()).unwrap_or("unknown")
+                "user_agent": user_agent.clone(),
+                "x_forwarded_for": x_forwarded_for.clone()
             }
         })),
         created_at: chrono::Utc::now(),

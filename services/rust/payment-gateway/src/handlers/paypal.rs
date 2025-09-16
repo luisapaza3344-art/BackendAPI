@@ -280,16 +280,19 @@ pub async fn process_payment(
         payload.amount, payload.currency
     );
 
-    // Extract security context from headers
-    let user_agent = headers.get("user-agent")
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("unknown")
-        .to_string();
-    let client_ip = headers.get("x-forwarded-for")
-        .or_else(|| headers.get("x-real-ip"))
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("127.0.0.1")
-        .to_string();
+    // Extract security context from headers in short scope to drop HeaderMap before awaits
+    let (user_agent, client_ip) = {
+        let user_agent = headers.get("user-agent")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("unknown")
+            .to_string();
+        let client_ip = headers.get("x-forwarded-for")
+            .or_else(|| headers.get("x-real-ip"))
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("127.0.0.1")
+            .to_string();
+        (user_agent, client_ip)
+    }; // HeaderMap dropped here before any awaits
 
     // 🔐 STEP 1: Post-Quantum Cryptographic Verification
     let crypto_start = std::time::Instant::now();

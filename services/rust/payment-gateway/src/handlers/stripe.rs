@@ -12,10 +12,23 @@ use crate::{
     AppState,
     utils::{
         FraudDetectionService, ComprehensiveFraudAnalysisResult, 
-        fraud_detection::{FraudAnalysisResult, FraudAction},
-        enhanced_fraud_service::{EnterpriseAction, EnterpriseRiskLevel},
+        fraud_detection::{FraudAnalysisResult, FraudAction, FraudRiskLevel},
+        enhanced_fraud_service::{
+            EnterpriseAction, EnterpriseRiskLevel, QuantumVerificationResult,
+            ProcessingMetrics, ComplianceStatus, AuditTrail
+        },
     },
 };
+
+/// Map EnterpriseAction to FraudAction
+fn map_enterprise_to_fraud_action(enterprise_action: &EnterpriseAction) -> FraudAction {
+    match enterprise_action {
+        EnterpriseAction::Monitor => FraudAction::Allow,
+        EnterpriseAction::RequireManualReview => FraudAction::RequireManualReview,
+        EnterpriseAction::BlockTransaction => FraudAction::Block,
+        _ => FraudAction::RequireAdditionalVerification,
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct StripePaymentRequest {
@@ -109,18 +122,22 @@ pub async fn process_payment(
         payload.amount, payload.currency, payload.customer_id
     );
 
-    // Extract client metadata for fraud detection
-    let client_ip = payload.client_ip.clone().or_else(|| {
-        headers.get("x-forwarded-for")
-            .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string())
-    }).unwrap_or("unknown".to_string());
-    
-    let user_agent = payload.user_agent.clone().or_else(|| {
-        headers.get("user-agent")
-            .and_then(|h| h.to_str().ok())
-            .map(|s| s.to_string())
-    }).unwrap_or("unknown".to_string());
+    // Extract client metadata for fraud detection in a short scope to drop HeaderMap before awaits
+    let (client_ip, user_agent) = {
+        let client_ip = payload.client_ip.clone().or_else(|| {
+            headers.get("x-forwarded-for")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.to_string())
+        }).unwrap_or("unknown".to_string());
+        
+        let user_agent = payload.user_agent.clone().or_else(|| {
+            headers.get("user-agent")
+                .and_then(|h| h.to_str().ok())
+                .map(|s| s.to_string())
+        }).unwrap_or("unknown".to_string());
+        
+        (client_ip, user_agent)
+    }; // HeaderMap is dropped here, before any awaits
 
     // Create comprehensive request metadata for fraud analysis
     let request_metadata = serde_json::json!({
@@ -317,11 +334,9 @@ pub async fn create_subscription(
         },
         blocked: should_block,
         reasons: vec![format!("Risk Level: {:?}", fraud_analysis.enterprise_risk_level)],
-        recommended_actions: fraud_analysis.recommended_actions.iter().map(|action| match action {
-            EnterpriseAction::Allow => FraudAction::Allow,
-            EnterpriseAction::BlockTransaction => FraudAction::Block,
-            _ => FraudAction::Monitor,
-        }).collect(),
+        recommended_actions: fraud_analysis.recommended_actions.iter()
+            .map(|action| map_enterprise_to_fraud_action(action))
+            .collect(),
         analysis_metadata: serde_json::json!({
             "analysis_id": fraud_analysis.analysis_id,
             "enterprise_risk_level": fraud_analysis.enterprise_risk_level
