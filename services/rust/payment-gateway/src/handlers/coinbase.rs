@@ -1417,43 +1417,144 @@ async fn perform_sanctions_screening(country: &str, email: &str) -> bool {
     true
 }
 
-/// Handle Coinbase Commerce webhooks with signature verification
+/// Validate Coinbase post-quantum timestamp to prevent replay attacks
 /// 
-/// Implements webhook signature verification and processes
-/// cryptocurrency payment events with blockchain monitoring
+/// Post-quantum signatures include timestamps to ensure freshness
+/// and prevent replay attacks in enterprise environments
+fn validate_coinbase_pq_timestamp(timestamp: &str) -> bool {
+    use chrono::{DateTime, Utc, Duration};
+    
+    // Parse the timestamp (expected in RFC3339 format)
+    let parsed_timestamp = match DateTime::parse_from_rfc3339(timestamp) {
+        Ok(ts) => ts.with_timezone(&Utc),
+        Err(e) => {
+            error!("❌ Invalid Coinbase post-quantum timestamp format '{}': {}", timestamp, e);
+            return false;
+        }
+    };
+    
+    let current_time = Utc::now();
+    let age = current_time.signed_duration_since(parsed_timestamp);
+    
+    // Allow 5 minutes tolerance for clock skew (more restrictive than HMAC)
+    let max_age = Duration::minutes(5);
+    let min_age = Duration::minutes(-2); // Allow 2 minutes in the future
+    
+    if age > max_age {
+        error!("❌ Coinbase post-quantum timestamp too old: {} minutes (max: 5)", age.num_minutes());
+        false
+    } else if age < min_age {
+        error!("❌ Coinbase post-quantum timestamp too far in future: {} minutes", age.num_minutes());
+        false
+    } else {
+        info!("✅ Coinbase post-quantum timestamp valid: {} (age: {} seconds)", timestamp, age.num_seconds());
+        true
+    }
+}
+
+/// Handle Coinbase Commerce webhooks with enterprise post-quantum verification
+/// 
+/// Implements hybrid webhook signature verification with:
+/// - Traditional HMAC-SHA256 verification for compatibility
+/// - Post-quantum Dilithium-5 signature verification for enterprise security
+/// - Enhanced replay attack prevention
+/// - Real-time security monitoring and alerting
 pub async fn handle_webhook(
     State(state): State<AppState>,
     headers: HeaderMap,
     body: String,
 ) -> Result<StatusCode, StatusCode> {
-    info!("Received Coinbase Commerce webhook");
+    let webhook_start = std::time::Instant::now();
+    info!("🔐 Processing enterprise Coinbase Commerce webhook with post-quantum security");
 
-    // Verify webhook signature using HMAC-SHA256
+    // Extract traditional HMAC-SHA256 signature
     let cb_signature = headers
         .get("X-CC-Webhook-Signature")
         .and_then(|v| v.to_str().ok())
         .ok_or(StatusCode::BAD_REQUEST)?;
 
-    // Verify Coinbase Commerce webhook signature
+    // Extract optional post-quantum signature headers for enterprise verification
+    let pq_signature = headers
+        .get("X-CC-PostQuantum-Signature")
+        .and_then(|v| v.to_str().ok());
+    let pq_key_id = headers
+        .get("X-CC-PostQuantum-KeyId")
+        .and_then(|v| v.to_str().ok());
+    let pq_timestamp = headers
+        .get("X-CC-PostQuantum-Timestamp")
+        .and_then(|v| v.to_str().ok());
+    let pq_algorithm = headers
+        .get("X-CC-PostQuantum-Algorithm")
+        .and_then(|v| v.to_str().ok());
+
+    // PHASE 1: Traditional HMAC-SHA256 verification (always required)
+    info!("🔐 Phase 1: Traditional HMAC-SHA256 signature verification");
     match state.crypto_service.verify_coinbase_signature(&body, cb_signature).await {
         Ok(true) => {
-            info!("✅ Coinbase webhook signature verified");
+            info!("✅ Coinbase HMAC-SHA256 signature verified successfully");
         },
         Ok(false) => {
-            error!("❌ Invalid Coinbase webhook signature - possible attack attempt");
+            error!("❌ Invalid Coinbase HMAC-SHA256 signature - possible attack attempt");
             return Err(StatusCode::UNAUTHORIZED);
         },
         Err(e) => {
-            error!("❌ Coinbase webhook signature verification error: {}", e);
+            error!("❌ Coinbase HMAC-SHA256 signature verification error: {}", e);
             return Err(StatusCode::INTERNAL_SERVER_ERROR);
         }
     }
 
-    // Parse webhook payload
-    let webhook_payload: CoinbaseWebhookPayload = serde_json::from_str(&body)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
+    // PHASE 2: Post-Quantum verification (if headers present)
+    let post_quantum_verified = if let (Some(pq_sig), Some(pq_key), Some(pq_algo)) = 
+        (pq_signature, pq_key_id, pq_algorithm) {
+        
+        info!("🔐 Phase 2: Post-quantum {} signature verification with key ID: {}", pq_algo, pq_key);
+        
+        // Validate post-quantum timestamp to prevent replay attacks
+        if let Some(timestamp) = pq_timestamp {
+            if !validate_coinbase_pq_timestamp(timestamp) {
+                error!("❌ Coinbase post-quantum timestamp validation failed - possible replay attack");
+                return Err(StatusCode::BAD_REQUEST);
+            }
+        }
+        
+        match state.crypto_service.verify_coinbase_post_quantum_signature(
+            &body, 
+            pq_sig, 
+            pq_key, 
+            pq_algo
+        ).await {
+            Ok(true) => {
+                info!("✅ Coinbase post-quantum signature verified successfully with {}", pq_algo);
+                true
+            },
+            Ok(false) => {
+                error!("❌ Invalid Coinbase post-quantum signature - enterprise security breach detected");
+                return Err(StatusCode::UNAUTHORIZED);
+            },
+            Err(e) => {
+                error!("❌ Coinbase post-quantum signature verification error: {}", e);
+                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+            }
+        }
+    } else {
+        info!("ℹ️ Post-quantum headers not present, using traditional HMAC-SHA256 only");
+        false
+    };
 
-    info!("Processing Coinbase webhook event: {}", webhook_payload.event_type);
+    // PHASE 3: Parse and validate webhook payload structure
+    let webhook_payload: CoinbaseWebhookPayload = serde_json::from_str(&body)
+        .map_err(|e| {
+            error!("❌ Failed to parse Coinbase webhook payload: {}", e);
+            StatusCode::BAD_REQUEST
+        })?;
+
+    info!("📡 Processing Coinbase webhook event: {} (post-quantum: {})", 
+        webhook_payload.event_type, post_quantum_verified);
+
+    // Log security verification results for enterprise audit trail
+    let verification_time = webhook_start.elapsed().as_millis();
+    info!("🔐 Enterprise security verification completed in {}ms - HMAC: ✅, PostQuantum: {}", 
+        verification_time, if post_quantum_verified { "✅" } else { "⚠️" });
 
     // Check for duplicate webhook processing (idempotency)
     if let Ok(already_processed) = state.payment_service.check_webhook_processed(&webhook_payload.id).await {

@@ -29,8 +29,17 @@ mod metrics;
 
 use crate::{
     crypto::{ZKProofSystem, PostQuantumCrypto},
-    handlers::{advanced_security, paypal, stripe, coinbase, payment},
-    middleware::{auth::auth_middleware, audit::AuditMiddleware},
+    handlers::{
+        advanced_security, paypal, stripe, coinbase, payment, 
+        webhook_security_monitor,
+    },
+    middleware::{
+        auth::auth_middleware, 
+        audit::AuditMiddleware,
+        WebhookRateLimiter,
+        WebhookRateLimitConfig,
+        webhook_rate_limit_middleware,
+    },
     service::payment_service::PaymentService,
     utils::crypto::CryptoService,
     metrics::PaymentMetrics,
@@ -44,6 +53,8 @@ pub struct AppState {
     pub zk_system: Arc<ZKProofSystem>,
     pub quantum_crypto: Arc<PostQuantumCrypto>,
     pub metrics: Arc<PaymentMetrics>,
+    pub webhook_rate_limiter: Arc<WebhookRateLimiter>,
+    pub security_monitor: Arc<webhook_security_monitor::WebhookSecurityMonitor>,
 }
 
 #[derive(Serialize)]
@@ -313,6 +324,15 @@ async fn main() -> anyhow::Result<()> {
     info!("🛡️ Initializing Post-Quantum Cryptography (NIST standards)");
     let quantum_crypto = Arc::new(PostQuantumCrypto::new().await?);
     
+    // Initialize Enterprise Webhook Rate Limiter
+    info!("🚦 Initializing Enterprise Webhook Rate Limiting with adaptive throttling");
+    let webhook_rate_config = WebhookRateLimitConfig::default();
+    let webhook_rate_limiter = Arc::new(WebhookRateLimiter::new(Some(webhook_rate_config)));
+    
+    // Initialize Real-time Webhook Security Monitor
+    info!("🔍 Initializing Real-time Webhook Security Monitor with ML detection");
+    let security_monitor = Arc::new(webhook_security_monitor::WebhookSecurityMonitor::new(None));
+    
     let metrics = Arc::new(PaymentMetrics::new()?);
 
     let app_state = AppState {
@@ -321,6 +341,8 @@ async fn main() -> anyhow::Result<()> {
         zk_system,
         quantum_crypto,
         metrics: metrics.clone(),
+        webhook_rate_limiter: webhook_rate_limiter.clone(),
+        security_monitor: security_monitor.clone(),
     };
 
     // Build application with middleware layers
@@ -341,6 +363,9 @@ async fn main() -> anyhow::Result<()> {
         // .route("/v1/security/verify-quantum-signature", post(advanced_security::verify_quantum_signature))
         // .route("/v1/compliance/report", get(advanced_security::compliance_report))
         .route("/v1/security/threat-detection", get(advanced_security::threat_detection_status))
+        // Real-time Security Monitoring endpoints
+        .route("/v1/security/monitoring/status", get(webhook_security_monitor::get_security_status))
+        .route("/v1/security/monitoring/incidents", get(webhook_security_monitor::get_security_incidents))
         .layer(
             ServiceBuilder::new()
                 .layer(TraceLayer::new_for_http())
@@ -372,7 +397,9 @@ async fn main() -> anyhow::Result<()> {
                     "Content-Security-Policy".parse::<axum::http::HeaderName>().unwrap(),
                     HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'")
                 ))
-                // Authentication and audit middleware - SECURITY: Auth first, then audit
+                // Enterprise webhook rate limiting - SECURITY: Rate limiting before auth
+                .layer(from_fn(webhook_rate_limit_middleware))
+                // Authentication and audit middleware - SECURITY: Auth after rate limiting, then audit
                 .layer(from_fn(auth_middleware))
                 .layer(AuditMiddleware::new()),
         )

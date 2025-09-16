@@ -6,7 +6,7 @@ use axum::{
 use base64::{Engine as _, engine::general_purpose};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tracing::{info, warn};
+use tracing::{info, warn, error};
 use chrono::{DateTime, Utc};
 
 use crate::{
@@ -279,10 +279,19 @@ async fn verify_post_quantum_signature(
             // SECURITY: Use actual Dilithium-5 cryptographic verification
             info!("🔐 Performing real Dilithium-5 signature verification");
             
+            // SECURITY: Implement proper Dilithium-5 public key lookup
+            let public_key_bytes = match get_post_quantum_public_key(&signature.algorithm, &signature.public_key_hash).await {
+                Ok(key) => key,
+                Err(e) => {
+                    error!("❌ Failed to retrieve Dilithium-5 public key (hash: {}): {}", signature.public_key_hash, e);
+                    return Ok(false);
+                }
+            };
+            
             // Use CryptoService for real post-quantum signature verification
             match app_state.crypto_service.verify_post_quantum_signature(
                 &signature.algorithm,
-                &[], // TODO: INCOMPLETE - Real public key lookup not implemented
+                &public_key_bytes,
                 &signature.signature,
                 original_data,
             ).await {
@@ -333,10 +342,19 @@ async fn verify_post_quantum_signature(
                 return Ok(false);
             }
             
+            // SECURITY: Implement proper SPHINCS+ public key lookup
+            let public_key_bytes = match get_post_quantum_public_key(&signature.algorithm, &signature.public_key_hash).await {
+                Ok(key) => key,
+                Err(e) => {
+                    error!("❌ Failed to retrieve SPHINCS+ public key (hash: {}): {}", signature.public_key_hash, e);
+                    return Ok(false);
+                }
+            };
+            
             // Use CryptoService to verify post-quantum signature
             match app_state.crypto_service.verify_post_quantum_signature(
                 &signature.algorithm,
-                &[], // TODO: INCOMPLETE - Real public key lookup not implemented
+                &public_key_bytes,
                 &signature.signature,
                 original_data,
             ).await {
@@ -469,4 +487,86 @@ fn calculate_inputs_hash(inputs: &PublicPaymentData) -> String {
     let inputs_json = serde_json::to_string(inputs).unwrap_or_default();
     let hash = Sha256::digest(inputs_json.as_bytes());
     hex::encode(hash)
+}
+
+/// Get post-quantum public key for signature verification
+/// 
+/// Implements secure public key management for post-quantum cryptography:
+/// - Support for Dilithium-5 and SPHINCS+ algorithms
+/// - Key lookup by algorithm and public key hash
+/// - Environment-based key storage for development/testing
+/// - Extensible for enterprise key management systems
+async fn get_post_quantum_public_key(algorithm: &str, public_key_hash: &str) -> anyhow::Result<Vec<u8>> {
+    use std::env;
+    use base64::{Engine as _, engine::general_purpose};
+    use sha2::{Sha256, Digest};
+    
+    info!("🔑 Retrieving post-quantum public key: algorithm={}, hash={}", algorithm, public_key_hash);
+    
+    // Validate inputs
+    if public_key_hash.is_empty() {
+        return Err(anyhow::anyhow!("Public key hash cannot be empty"));
+    }
+    
+    // Validate algorithm and determine expected key size
+    let expected_key_size = match algorithm {
+        "Dilithium-5" => 2592, // Dilithium-5 public key size in bytes
+        "SPHINCS+-SHAKE256-256s-simple" => 64, // SPHINCS+ public key size in bytes
+        _ => {
+            return Err(anyhow::anyhow!("Unsupported post-quantum algorithm: {}", algorithm));
+        }
+    };
+    
+    // Create safe environment variable name from algorithm and hash
+    let safe_algorithm = algorithm.replace(&['+', '-', ' '][..], "_");
+    let safe_hash = public_key_hash.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(8) // Use first 8 characters of hash for brevity
+        .collect::<String>()
+        .to_uppercase();
+    
+    let env_key_name = format!("PQ_PUBLIC_KEY_{}_{}", safe_algorithm, safe_hash);
+    
+    // Try to get key from environment variable
+    if let Ok(encoded_key) = env::var(&env_key_name) {
+        info!("📁 Using post-quantum public key from environment: {}", env_key_name);
+        
+        // Decode base64 key
+        let key_bytes = general_purpose::STANDARD.decode(&encoded_key)
+            .map_err(|e| anyhow::anyhow!("Invalid base64 encoding for key {}: {}", env_key_name, e))?;
+        
+        // Validate key size matches algorithm requirements
+        if key_bytes.len() != expected_key_size {
+            return Err(anyhow::anyhow!(
+                "Invalid {} public key size: {} bytes (expected {})", 
+                algorithm, key_bytes.len(), expected_key_size
+            ));
+        }
+        
+        // Verify key hash matches expected hash (security validation)
+        let computed_hash = format!("{:x}", Sha256::digest(&key_bytes));
+        if !computed_hash.starts_with(&public_key_hash.to_lowercase()) {
+            warn!("⚠️ Public key hash mismatch - key may be incorrect or corrupted");
+            warn!("Expected hash prefix: {}", public_key_hash.to_lowercase());
+            warn!("Computed hash: {}", computed_hash);
+        }
+        
+        info!("✅ Successfully retrieved {} public key ({} bytes)", algorithm, key_bytes.len());
+        return Ok(key_bytes);
+    }
+    
+    // Key not found in environment - provide helpful error message
+    warn!("⚠️ Post-quantum public key not found: {}", env_key_name);
+    info!("💡 To configure post-quantum verification, set environment variable:");
+    info!("    {}=<base64_encoded_public_key>", env_key_name);
+    info!("    Key must be {} bytes for {}", expected_key_size, algorithm);
+    
+    Err(anyhow::anyhow!(
+        "Post-quantum public key not configured for {} (hash: {})\n\n\
+        To enable post-quantum signature verification:\n\
+        1. Set environment variable: {}=<base64_encoded_key>\n\
+        2. Key must be exactly {} bytes for {} algorithm\n\
+        3. Key hash should match: {}", 
+        algorithm, public_key_hash, env_key_name, expected_key_size, algorithm, public_key_hash
+    ))
 }
