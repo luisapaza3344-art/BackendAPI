@@ -1,5 +1,5 @@
 use anyhow::Result;
-use tracing::{info, error};
+use tracing::{info, error, warn};
 use uuid::Uuid;
 use crate::models::payment_request::{PaymentRequest, PaymentStatus};
 use crate::repository::database::DatabaseRepository;
@@ -82,16 +82,16 @@ impl PaymentService {
     pub async fn check_webhook_processed(&self, event_id: &str) -> Result<bool> {
         info!("Checking if webhook {} already processed", event_id);
         
-        // Extract provider from event_id or use generic "webhook" 
-        let provider = "paypal"; // This could be determined from event_id format
+        // Extract provider from event_id format with intelligent detection
+        let provider = self.detect_provider_from_event_id(event_id);
         
-        let is_processed = self.db.is_webhook_processed(provider, event_id).await
+        let is_processed = self.db.is_webhook_processed(&provider, event_id).await
             .map_err(|e| {
-                error!("Failed to check webhook status for {}: {}", event_id, e);
+                error!("Failed to check webhook status for {} (provider: {}): {}", event_id, provider, e);
                 e
             })?;
         
-        info!("✅ Webhook {} processed status: {}", event_id, is_processed);
+        info!("✅ Webhook {} processed status: {} (provider: {})", event_id, is_processed, provider);
         Ok(is_processed)
     }
 
@@ -99,16 +99,16 @@ impl PaymentService {
     pub async fn mark_webhook_processed(&self, event_id: &str, _ttl_seconds: u64) -> Result<()> {
         info!("Marking webhook {} as processed", event_id);
         
-        // Extract provider from event_id or use generic "webhook"
-        let provider = "paypal"; // This could be determined from event_id format
+        // Extract provider from event_id format with intelligent detection
+        let provider = self.detect_provider_from_event_id(event_id);
         
-        self.db.mark_webhook_processed(provider, event_id).await
+        self.db.mark_webhook_processed(&provider, event_id).await
             .map_err(|e| {
-                error!("Failed to mark webhook {} as processed: {}", event_id, e);
+                error!("Failed to mark webhook {} as processed (provider: {}): {}", event_id, provider, e);
                 e
             })?;
         
-        info!("✅ Webhook {} marked as processed", event_id);
+        info!("✅ Webhook {} marked as processed (provider: {})", event_id, provider);
         Ok(())
     }
 
@@ -200,5 +200,46 @@ impl PaymentService {
         
         info!("✅ Webhook event processed with audit trail: {}", webhook_uuid);
         Ok(webhook_uuid)
+    }
+    
+    /// Intelligent provider detection from webhook event ID format
+    /// 
+    /// Analyzes event ID patterns to determine the payment provider
+    /// - Stripe: "evt_" prefix (e.g., "evt_1234567890")
+    /// - PayPal: "WH-" prefix or UUID format (e.g., "WH-2B4567890-ABC123")
+    /// - Coinbase: "charge:" prefix or 8-character hex (e.g., "charge:abc123", "12ab34cd")
+    /// - Generic: fallback for unknown formats
+    fn detect_provider_from_event_id(&self, event_id: &str) -> String {
+        // Stripe webhook event IDs start with "evt_"
+        if event_id.starts_with("evt_") {
+            info!("🔍 Detected Stripe webhook event: {}", event_id);
+            return "stripe".to_string();
+        }
+        
+        // PayPal webhook event IDs typically start with "WH-" or are UUIDs
+        if event_id.starts_with("WH-") || event_id.contains("-") && event_id.len() >= 36 {
+            info!("🔍 Detected PayPal webhook event: {}", event_id);
+            return "paypal".to_string();
+        }
+        
+        // Coinbase webhook event IDs often start with "charge:" or are 8-character hex codes
+        if event_id.starts_with("charge:") || 
+           event_id.starts_with("transaction:") ||
+           event_id.starts_with("payment:") ||
+           (event_id.len() == 8 && event_id.chars().all(|c| c.is_ascii_hexdigit())) {
+            info!("🔍 Detected Coinbase webhook event: {}", event_id);
+            return "coinbase".to_string();
+        }
+        
+        // Additional provider patterns can be added here
+        // Square: "sq_" prefix
+        if event_id.starts_with("sq_") {
+            info!("🔍 Detected Square webhook event: {}", event_id);
+            return "square".to_string();
+        }
+        
+        // Unknown format - use generic webhook
+        warn!("⚠️ Unknown webhook event ID format, using generic provider: {}", event_id);
+        "webhook".to_string()
     }
 }
