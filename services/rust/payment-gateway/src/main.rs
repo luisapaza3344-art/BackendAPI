@@ -461,9 +461,11 @@ async fn main() -> anyhow::Result<()> {
     info!("✅ Zero-Knowledge Proofs: INITIALIZED");
     info!("✅ PCI-DSS Level 1: COMPLIANT");
 
-    // Enterprise-ready axum server using into_service as suggested by compiler
+    // Enterprise-ready axum server following Security Service pattern that works
     println!("🚀 Payment Gateway starting on {}", addr);
-    axum::serve(listener, app.into_service()).await?;
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| anyhow::anyhow!("Server error: {}", e))?;
     
     Ok(())
 }
