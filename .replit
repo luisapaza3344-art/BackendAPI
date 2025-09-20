@@ -31,6 +31,10 @@ args = "Auth Service"
 task = "workflow.run"
 args = "Enterprise API Gateway"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Enterprise Message Queue"
+
 [[workflows.workflow]]
 name = "Payment Gateway"
 author = "agent"
@@ -90,6 +94,17 @@ task = "shell.exec"
 args = "cd services/go/api-gateway && PORT=9000 go run cmd/main.go"
 waitForPort = 9000
 
+[[workflows.workflow]]
+name = "Enterprise Message Queue"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/python/message-queue-service && python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 8000
 externalPort = 8000
@@ -112,4 +127,4 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
-packages = ["openssl", "pkg-config"]
+packages = ["cargo", "libiconv", "libuv", "libxcrypt", "openssl", "pkg-config", "rustc"]
