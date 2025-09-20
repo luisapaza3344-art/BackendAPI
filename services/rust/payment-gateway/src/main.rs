@@ -27,6 +27,9 @@ mod middleware;
 mod utils;
 mod metrics;
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     crypto::{ZKProofSystem, PostQuantumCrypto},
     handlers::{
