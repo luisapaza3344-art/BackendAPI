@@ -8,7 +8,6 @@ import (
         "api-gateway/internal/metrics"
         "api-gateway/internal/redis"
         "github.com/gin-gonic/gin"
-        "go.uber.org/zap"
 )
 
 // FIPSLogger creates FIPS-compliant logging middleware
