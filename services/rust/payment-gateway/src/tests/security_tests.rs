@@ -133,14 +133,20 @@ mod security_tests {
         // Test ZK proof generation for sensitive payment data
         let sensitive_payment_data = crate::crypto::PublicPaymentData {
             amount_cents: 50000, // $500.00 - sensitive amount
-            currency: "USD".to_string(),
-            recipient_id: "sensitive_recipient_789".to_string(),
-            timestamp: chrono::Utc::now(),
+            currency_code: "USD".to_string(),
+            merchant_id: "sensitive_merchant_789".to_string(),
+            timestamp: chrono::Utc::now().timestamp() as u64,
         };
         
         println!("🔒 Testing zero-knowledge proof privacy preservation...");
         
-        let proof_result = zk_system.generate_payment_proof(&sensitive_payment_data, None).await;
+        let private_data = crate::crypto::PrivatePaymentData {
+            card_token: "sensitive_token_789".to_string(),
+            customer_id: "sensitive_customer_456".to_string(),
+            provider_reference: "sensitive_ref_zkp".to_string(),
+            risk_score: 25,
+        };
+        let proof_result = zk_system.generate_payment_proof(&sensitive_payment_data, &private_data).await;
         
         match proof_result {
             Ok(payment_proof) => {
@@ -167,9 +173,9 @@ mod security_tests {
                 // Test proof verification with wrong data (should fail)
                 let wrong_data = crate::crypto::PublicPaymentData {
                     amount_cents: 60000, // Different amount
-                    currency: "USD".to_string(),
-                    recipient_id: "wrong_recipient".to_string(),
-                    timestamp: chrono::Utc::now(),
+                    currency_code: "USD".to_string(),
+                    merchant_id: "wrong_merchant".to_string(),
+                    timestamp: chrono::Utc::now().timestamp() as u64,
                 };
                 
                 let wrong_verification = zk_system.verify_payment_proof(&payment_proof, &wrong_data).await;

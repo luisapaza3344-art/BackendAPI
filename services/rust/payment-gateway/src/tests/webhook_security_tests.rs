@@ -102,7 +102,8 @@ mod webhook_security_tests {
             Some("SHA256withRSA"),
             Some("transmission_id_test_123456"),
             Some("CERT-360caa42-fca2-4849-b3d4-198c597f9265"),
-            Some("mGdPEBllVkdJtWHfnQeRDdItmSRhgzAuOQJLkKrLkJJY8fZhbCJaJfKAATjweTp6d/gVrJNb+VlJ/LjM7HJsKZS7Vp7xF8qtKKZeEy9wgEu5u6c6Cs6aTs+g9xGvG5EhOE5LYdNKHKz9Ev7YhQ5GVp8mLYP8rJxgTcUyuPe5rJ4EQJhzgNLFzU8vJ5lM4P1cCB5W0e5mGm9tN8K8tE5S8P9vKAD4Qn7K8nE4Aj0Z4cW7bR9a2Yn7O5h8d5g2VLZF3i6K8fZhbCJaJfKAATjweTp6d")
+            Some("mGdPEBllVkdJtWHfnQeRDdItmSRhgzAuOQJLkKrLkJJY8fZhbCJaJfKAATjweTp6d/gVrJNb+VlJ/LjM7HJsKZS7Vp7xF8qtKKZeEy9wgEu5u6c6Cs6aTs+g9xGvG5EhOE5LYdNKHKz9Ev7YhQ5GVp8mLYP8rJxgTcUyuPe5rJ4EQJhzgNLFzU8vJ5lM4P1cCB5W0e5mGm9tN8K8tE5S8P9vKAD4Qn7K8nE4Aj0Z4cW7bR9a2Yn7O5h8d5g2VLZF3i6K8fZhbCJaJfKAATjweTp6d"),
+            Some("1234567890") // transmission_time
         ).await?;
         assert!(result, "Valid PayPal signature headers should verify successfully");
         
@@ -112,7 +113,8 @@ mod webhook_security_tests {
             None, // Missing auth algo
             Some("transmission_id_test"),
             Some("CERT-test"),
-            Some("signature_test")
+            Some("signature_test"),
+            Some("1234567890") // transmission_time
         ).await?;
         assert!(!result, "Missing PayPal headers should be rejected");
         
@@ -122,7 +124,8 @@ mod webhook_security_tests {
             Some("UNSUPPORTED_ALGO"),
             Some("transmission_id_test"),
             Some("CERT-test"),
-            Some("signature_test")
+            Some("signature_test"),
+            Some("1234567890") // transmission_time
         ).await?;
         assert!(!result, "Unsupported PayPal algorithm should be rejected");
         
