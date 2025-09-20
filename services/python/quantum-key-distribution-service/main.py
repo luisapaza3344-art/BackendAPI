@@ -575,9 +575,22 @@ class EnterpriseQuantumKeyDistributionService:
         expired_keys = []
         
         for key_id, key_data in self.quantum_keys.items():
-            expires_at = datetime.fromisoformat(key_data['metadata'].expires_at.replace('Z', '+00:00'))
-            if current_time > expires_at:
-                expired_keys.append(key_id)
+            try:
+                expires_str = key_data['metadata'].expires_at
+                # Handle both old 'Z' format and new timezone-aware format
+                if expires_str.endswith('Z'):
+                    expires_at = datetime.fromisoformat(expires_str.replace('Z', '+00:00'))
+                else:
+                    expires_at = datetime.fromisoformat(expires_str)
+                # Ensure comparison is timezone-aware
+                if expires_at.tzinfo is None:
+                    expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+                if current_time > expires_at:
+                    expired_keys.append(key_id)
+            except Exception as e:
+                logger.warning(f"⚠️ Error parsing expiry for key {key_id[:16]}: {e}")
+                # Keep key if we can't parse expiry (safety measure)
+                continue
         
         for key_id in expired_keys:
             del self.quantum_keys[key_id]
