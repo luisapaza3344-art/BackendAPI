@@ -2,6 +2,7 @@ use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
+    response::IntoResponse,
 };
 use serde::{Deserialize, Serialize};
 use tracing::{info, error, warn};
@@ -115,7 +116,7 @@ pub struct StripeWebhookPayload {
 pub async fn process_payment(
     State(state): State<AppState>,
     Json(payload): Json<StripePaymentRequest>,
-) -> Result<Json<StripePaymentResponse>, StatusCode> {
+) -> Result<Json<StripePaymentResponse>, (StatusCode, String)> {
     info!(
         "🚀 Processing enterprise Stripe payment: amount={} currency={} customer={:?}", 
         payload.amount, payload.currency, payload.customer_id
@@ -162,13 +163,13 @@ pub async fn process_payment(
     let fraud_service = FraudDetectionService::new().await
         .map_err(|e| {
             error!("Failed to initialize enhanced fraud service: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
+            (StatusCode::INTERNAL_SERVER_ERROR, "Service temporarily unavailable".to_string())
         })?;
     
     let comprehensive_analysis = fraud_service.analyze_payment(&payment_request, Some(request_metadata))
         .await.map_err(|e| {
             error!("Comprehensive fraud detection failed: {}", e);
-            StatusCode::INTERNAL_SERVER_ERROR
+            (StatusCode::INTERNAL_SERVER_ERROR, "Service temporarily unavailable".to_string())
         })?;
     
     // Convert to legacy format for backward compatibility
@@ -199,7 +200,7 @@ pub async fn process_payment(
                   fraud_alert.alert_id, fraud_alert.severity);
         }
         
-        return Err(StatusCode::FORBIDDEN);
+        return Err((StatusCode::FORBIDDEN, "Transaction blocked by fraud detection".to_string()));
     }
     
     info!("🛡️ Maximum enterprise fraud analysis completed: \
@@ -222,11 +223,11 @@ pub async fn process_payment(
         match state.crypto_service.verify_zkp_proof(zkp_proof).await {
             Ok(valid) if !valid => {
                 warn!("❌ Invalid post-quantum zero-knowledge proof provided");
-                return Err(StatusCode::BAD_REQUEST);
+                return Err((StatusCode::BAD_REQUEST, "Invalid request parameters".to_string()));
             },
             Err(e) => {
                 error!("❌ Failed to verify post-quantum ZKP: {}", e);
-                return Err(StatusCode::INTERNAL_SERVER_ERROR);
+                return Err((StatusCode::INTERNAL_SERVER_ERROR, "Request processing failed".to_string()));
             },
             _ => info!("✅ Post-quantum zero-knowledge proof verified"),
         }
@@ -262,7 +263,7 @@ pub async fn process_payment(
         },
         Err(e) => {
             error!("❌ Enterprise Stripe payment failed: {}", e);
-            Err(StatusCode::PAYMENT_REQUIRED)
+            Err((StatusCode::PAYMENT_REQUIRED, format!("Payment processing failed: {}", e)))
         }
     }
 }

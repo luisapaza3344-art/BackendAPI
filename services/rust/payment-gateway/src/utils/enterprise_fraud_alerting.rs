@@ -860,9 +860,13 @@ impl EnterpriseFraudAlertingService {
     
     /// Send email notification for fraud alert
     async fn send_email_notification(&self, alert: &FraudAlert) -> Result<()> {
-        let transport = self.email_transport.lock();
-        let smtp_transport = transport.as_ref()
-            .ok_or_else(|| anyhow!("Email transport not initialized"))?;
+        // Clone the transport to avoid holding the lock across await
+        let smtp_transport = {
+            let transport = self.email_transport.lock();
+            transport.as_ref()
+                .ok_or_else(|| anyhow!("Email transport not initialized"))?
+                .clone()
+        };
         
         let recipients = self.email_recipients.read().await;
         let recipient_list = recipients.get(&alert.severity)

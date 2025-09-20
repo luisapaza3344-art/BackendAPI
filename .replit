@@ -36,8 +36,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd services/rust/payment-gateway && CARGO_BUILD_JOBS=2 cargo run --no-default-features --features \"ml-minimal pq-dilithium\" --bin payment-gateway"
-waitForPort = 8080
+args = "cd services/rust/payment-gateway && CARGO_BUILD_JOBS=2 cargo run --no-default-features --features \"ml-minimal pq-dilithium pq-kyber\" --bin payment-gateway"
 
 [[workflows.workflow]]
 name = "Crypto Attestation Agent"

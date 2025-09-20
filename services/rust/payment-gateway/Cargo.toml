@@ -11,7 +11,7 @@ tokio = { version = "1.0", features = ["full"] }
 axum = { version = "0.7", features = ["json", "tracing", "macros"] }
 axum-extra = { version = "0.9", features = ["typed-header"] }
 tower = { version = "0.4", features = ["util", "timeout", "load-shed", "limit"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "timeout"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "timeout", "compression-br", "set-header"] }
 hyper = "0.14"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -181,7 +181,7 @@ lru = "0.12"
 default = ["ml-minimal", "pq-dilithium"]
 ml-full = ["dep:tch", "ml-candle", "dep:smartcore", "dep:linfa", "dep:linfa-trees", "dep:linfa-clustering", "dep:linfa-nn"]
 ml-candle = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers"]
-ml-minimal = []
+ml-minimal = ["dep:smartcore"]
 minimal-build = []
 stripe-only = []
 alerts = ["dep:slack-hook"]

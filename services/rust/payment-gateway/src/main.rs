@@ -345,9 +345,8 @@ async fn main() -> anyhow::Result<()> {
         security_monitor: security_monitor.clone(),
     };
 
-    // Build application with middleware layers
+    // Build application with middleware layers (following Security Service pattern)
     let app = Router::new()
-        .with_state(app_state.clone())
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health_check))
         .route("/v1/payments/stripe", post(stripe::process_payment))
@@ -404,7 +403,8 @@ async fn main() -> anyhow::Result<()> {
                 .layer(from_fn(auth_middleware))
                 .layer(AuditMiddleware::new()),
         )
-;
+        // Add shared state at the end (matching Security Service pattern)
+        .with_state(app_state.clone());
 
     // Start SECURED metrics endpoint with authentication
     let metrics_clone = metrics.clone();
@@ -461,7 +461,7 @@ async fn main() -> anyhow::Result<()> {
     info!("✅ Zero-Knowledge Proofs: INITIALIZED");
     info!("✅ PCI-DSS Level 1: COMPLIANT");
 
-    // Enterprise-ready axum server following Security Service pattern that works
+    // Enterprise-ready axum server (Security Service pattern - direct router)
     println!("🚀 Payment Gateway starting on {}", addr);
     axum::serve(listener, app)
         .await
