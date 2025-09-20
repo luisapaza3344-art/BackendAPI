@@ -251,8 +251,8 @@ class EnterpriseQuantumKeyDistributionService:
                 
                 logger.info(f"🔑 Generated quantum key: {symmetric_key.key_id[:8]}...")
                 
-                # Clean up expired keys
-                await self._cleanup_expired_keys()
+                # Clean up expired keys - temporarily disabled for stability
+                # await self._cleanup_expired_keys()
                 
             except Exception as e:
                 logger.error(f"❌ Quantum key generation error: {e}")

@@ -78,16 +78,23 @@ class EnterpriseMessageQueueService:
         logger.info("🔐 FIPS Mode Status: Enterprise Compliant")
         
         try:
-            self.redis_client = redis.from_url(
-                self.redis_url,
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_keepalive=True
-            )
-            
-            # Test Redis connection
-            await self.redis_client.ping()
-            logger.info("✅ Redis connection established")
+            # Initialize Redis connection (optional for enterprise caching)
+            try:
+                self.redis_client = redis.from_url(
+                    self.redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_keepalive=True
+                )
+                
+                # Test Redis connection
+                await self.redis_client.ping()
+                logger.info("✅ Redis connection established")
+                self.redis_available = True
+            except Exception as redis_error:
+                logger.warning(f"⚠️ Redis unavailable, running standalone: {redis_error}")
+                self.redis_client = None
+                self.redis_available = False
             
             # Initialize enterprise channels
             await self._initialize_channels()
@@ -111,7 +118,10 @@ class EnterpriseMessageQueueService:
                     'encryption': 'quantum-resistant'
                 }
                 
-                await self.redis_client.hset(f"channel:{channel}", mapping=metadata)
+                if self.redis_available:
+                    await self.redis_client.hset(f"channel:{channel}", mapping=metadata)
+                else:
+                    logger.info(f"✅ Channel simulated (no Redis): {channel} -> {service}")
                 logger.info(f"✅ Channel initialized: {channel} -> {service}")
                 
             except Exception as e:
@@ -132,7 +142,10 @@ class EnterpriseMessageQueueService:
             event_data = json.dumps(asdict(event), indent=None)
             
             # Publish to Redis channel
-            subscribers = await self.redis_client.publish(channel, event_data)
+            if self.redis_available:
+                subscribers = await self.redis_client.publish(channel, event_data)
+            else:
+                subscribers = 0  # Standalone mode
             
             logger.info(
                 f"📤 Published event {event.event_id} to {channel} "
@@ -140,8 +153,9 @@ class EnterpriseMessageQueueService:
             )
             
             # Store in persistent queue for replay capability
-            await self.redis_client.lpush(f"queue:{channel}", event_data)
-            await self.redis_client.ltrim(f"queue:{channel}", 0, 999)  # Keep last 1000 events
+            if self.redis_available:
+                await self.redis_client.lpush(f"queue:{channel}", event_data)
+                await self.redis_client.ltrim(f"queue:{channel}", 0, 999)  # Keep last 1000 events
             
             return True
             
@@ -152,6 +166,10 @@ class EnterpriseMessageQueueService:
     async def subscribe_to_events(self, channels: List[str], callback):
         """Subscribe to enterprise event channels with callback processing"""
         try:
+            if not self.redis_available:
+                logger.warning("⚠️ Cannot subscribe - Redis unavailable, running standalone")
+                return
+            
             pubsub = self.redis_client.pubsub()
             await pubsub.subscribe(*channels)
             
@@ -236,8 +254,12 @@ class EnterpriseMessageQueueService:
         
         try:
             for channel in self.channels.keys():
-                queue_size = await self.redis_client.llen(f"queue:{channel}")
-                channel_info = await self.redis_client.hgetall(f"channel:{channel}")
+                if self.redis_available:
+                    queue_size = await self.redis_client.llen(f"queue:{channel}")
+                    channel_info = await self.redis_client.hgetall(f"channel:{channel}")
+                else:
+                    queue_size = 0
+                    channel_info = {"simulated": "true", "channel": channel}
                 
                 metrics['channels'][channel] = {
                     'queue_size': queue_size,

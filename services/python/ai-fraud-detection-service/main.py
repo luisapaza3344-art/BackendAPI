@@ -117,16 +117,22 @@ class EnterpriseAIFraudDetectionService:
         logger.info("🔐 FIPS Mode Status: Enterprise ML Compliant")
         
         try:
-            # Initialize Redis connection
-            self.redis_client = redis.from_url(
-                self.redis_url,
-                decode_responses=True,
-                socket_connect_timeout=5,
-                socket_keepalive=True
-            )
-            
-            await self.redis_client.ping()
-            logger.info("✅ Redis connection established for ML feature caching")
+            # Initialize Redis connection (optional for caching)
+            try:
+                self.redis_client = redis.from_url(
+                    self.redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=5,
+                    socket_keepalive=True
+                )
+                
+                await self.redis_client.ping()
+                logger.info("✅ Redis connection established for ML feature caching")
+                self.redis_available = True
+            except Exception as redis_error:
+                logger.warning(f"⚠️ Redis unavailable, running standalone: {redis_error}")
+                self.redis_client = None
+                self.redis_available = False
             
             # Initialize ML models
             await self._initialize_ml_models()
