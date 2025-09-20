@@ -251,8 +251,8 @@ pub async fn process_payment(
             response.risk_score = response.fraud_analysis.risk_score;
             response.post_quantum_verified = payload.zkp_proof.is_some();
             response.compliance_status = serde_json::json!({
-                "pci_dss_level": "1",
-                "fips_140_3_compliant": true,
+                "pci_dss_level": "designed_for_1",
+                "fips_140_3_ready": true,
                 "post_quantum_secured": true,
                 "audit_trail_enabled": true
             });
@@ -263,7 +263,7 @@ pub async fn process_payment(
         },
         Err(e) => {
             error!("❌ Enterprise Stripe payment failed: {}", e);
-            Err((StatusCode::PAYMENT_REQUIRED, format!("Payment processing failed: {}", e)))
+            Err((StatusCode::PAYMENT_REQUIRED, "Payment processing failed".to_string()))
         }
     }
 }
@@ -663,8 +663,8 @@ async fn process_stripe_payment_internal(
         // Post-quantum cryptographic verification
         post_quantum_verified: stripe_payload.zkp_proof.is_some(),
         compliance_status: serde_json::json!({
-            "pci_dss_level": "1",
-            "fips_140_3_compliant": true,
+            "pci_dss_level": "designed_for_1",
+            "fips_140_3_ready": true,
             "post_quantum_secured": true,
             "audit_trail_enabled": true
         }),

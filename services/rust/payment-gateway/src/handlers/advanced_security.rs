@@ -38,14 +38,14 @@ pub struct ZKVerificationResponse {
 #[derive(Debug, Serialize)]
 pub struct SystemIntegrityResponse {
     pub integrity_status: String,
-    pub fips_140_3_level_3: bool,
-    pub pci_dss_level_1: bool,
-    pub zero_knowledge_proofs: bool,
-    pub post_quantum_crypto: bool,
-    pub hsm_connected: bool,
+    pub fips_140_3_ready: bool,
+    pub pci_dss_architecture_ready: bool,
+    pub zero_knowledge_proofs_initialized: bool,
+    pub post_quantum_crypto_ready: bool,
+    pub hsm_interface_connected: bool,
     pub audit_trail_immutable: bool,
     pub quantum_resistant_algorithms: Vec<String>,
-    pub certification_compliance: HashMap<String, bool>,
+    pub certification_readiness: HashMap<String, bool>,
     pub last_security_audit: DateTime<Utc>,
     pub verification_endpoint_public: bool,
 }
@@ -72,15 +72,15 @@ pub struct QuantumSignatureVerificationResponse {
 #[derive(Debug, Serialize)]
 pub struct ComplianceReportResponse {
     pub compliance_framework: String,
-    pub certification_level: String,
+    pub certification_readiness: String,
     pub audit_trail_integrity: bool,
-    pub cryptographic_standards: Vec<String>,
+    pub cryptographic_standards_ready: Vec<String>,
     pub security_controls: HashMap<String, bool>,
     pub risk_assessment: String,
     pub last_penetration_test: DateTime<Utc>,
-    pub regulatory_compliance: HashMap<String, String>,
+    pub regulatory_readiness: HashMap<String, String>,
     pub data_protection_compliance: HashMap<String, bool>,
-    pub financial_grade_security: bool,
+    pub financial_grade_security_architecture: bool,
 }
 
 /// Public endpoint for verifying Zero-Knowledge Proofs
@@ -168,11 +168,11 @@ pub async fn verify_system_integrity(
     
     let mut certification_compliance = HashMap::new();
     // SECURITY: Dynamic compliance status based on actual verification results
-    certification_compliance.insert("FIPS-140-3-Level-3".to_string(), fips_compliant); // Real FIPS verification
-    certification_compliance.insert("PCI-DSS-Level-1".to_string(), db_healthy && fips_compliant); // DB + FIPS compliance
-    certification_compliance.insert("SOC-2-Type-II".to_string(), hsm_connected && fips_compliant); // HSM + FIPS security
-    certification_compliance.insert("ISO-27001".to_string(), zk_ready && quantum_ready); // Crypto systems operational
-    certification_compliance.insert("NIST-Cybersecurity-Framework".to_string(), pq_ready); // Post-quantum readiness
+    certification_compliance.insert("FIPS-140-3-ready".to_string(), fips_compliant); // Real FIPS verification
+    certification_compliance.insert("PCI-DSS-architecture-ready".to_string(), db_healthy && fips_compliant); // DB + FIPS compliance
+    certification_compliance.insert("SOC-2-interface-ready".to_string(), hsm_connected && fips_compliant); // HSM + FIPS security
+    certification_compliance.insert("ISO-27001-systems-ready".to_string(), zk_ready && quantum_ready); // Crypto systems operational
+    certification_compliance.insert("NIST-framework-ready".to_string(), pq_ready); // Post-quantum readiness
     
     let quantum_algorithms = vec![
         "Kyber-1024 (NIST Level 5)".to_string(),
@@ -185,14 +185,14 @@ pub async fn verify_system_integrity(
     
     let response = SystemIntegrityResponse {
         integrity_status: if overall_integrity { "SECURE" } else { "DEGRADED" }.to_string(),
-        fips_140_3_level_3: fips_compliant, // Real FIPS mode verification result
-        pci_dss_level_1: db_healthy && fips_compliant, // Database health + FIPS compliance
-        zero_knowledge_proofs: zk_ready,
-        post_quantum_crypto: quantum_ready && pq_ready, // ZK system + crypto service readiness
-        hsm_connected, // Real HSM connectivity status
+        fips_140_3_ready: fips_compliant, // Real FIPS mode verification result
+        pci_dss_architecture_ready: db_healthy && fips_compliant, // Database health + FIPS compliance
+        zero_knowledge_proofs_initialized: zk_ready,
+        post_quantum_crypto_ready: quantum_ready && pq_ready, // ZK system + crypto service readiness
+        hsm_interface_connected: hsm_connected, // Real HSM connectivity status
         audit_trail_immutable: false, // Security audit system not implemented in current AppState
         quantum_resistant_algorithms: quantum_algorithms,
-        certification_compliance,
+        certification_readiness: certification_compliance,
         last_security_audit: Utc::now(),
         verification_endpoint_public: true,
     };
@@ -434,15 +434,15 @@ pub async fn compliance_report(
     
     let response = ComplianceReportResponse {
         compliance_framework: "Multi-Framework (PCI-DSS, FIPS, SOC2, ISO27001)".to_string(),
-        certification_level: "Financial-Grade Security".to_string(),
+        certification_readiness: "Financial-Grade Security Architecture Ready".to_string(),
         audit_trail_integrity: audit_system_healthy && has_audit_records, // Real audit trail status
-        cryptographic_standards,
+        cryptographic_standards_ready: cryptographic_standards,
         security_controls,
         risk_assessment: "LOW - Comprehensive security controls implemented".to_string(),
         last_penetration_test: Utc::now(),
-        regulatory_compliance,
+        regulatory_readiness: regulatory_compliance,
         data_protection_compliance: data_protection,
-        financial_grade_security: overall_compliant, // Based on comprehensive system verification
+        financial_grade_security_architecture: overall_compliant, // Based on comprehensive system verification
     };
     
     info!("✅ Compliance report generated");

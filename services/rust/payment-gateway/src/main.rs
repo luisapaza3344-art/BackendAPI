@@ -456,10 +456,10 @@ async fn main() -> anyhow::Result<()> {
     let listener = TcpListener::bind(&addr).await?;
     
     info!("Payment Gateway listening on http://{}", addr);
-    info!("✅ FIPS 140-3 Mode: ENABLED");
-    info!("✅ HSM Integration: READY"); 
-    info!("✅ Zero-Knowledge Proofs: INITIALIZED");
-    info!("✅ PCI-DSS Level 1: COMPLIANT");
+    info!("🔐 FIPS 140-3 Design: Algorithms ready (validation pending)");
+    info!("🔒 HSM Integration: Interface ready (hardware validation pending)");
+    info!("🔑 Zero-Knowledge Proofs: System initialized"); 
+    info!("🛡️ PCI-DSS Level 1: Architecture designed for compliance (audit pending)");
 
     // Enterprise-ready axum server (Security Service pattern - direct router)
     println!("🚀 Payment Gateway starting on {}", addr);

@@ -518,7 +518,7 @@ fn create_enhanced_metadata(
         },
         "compliance": {
             "gdpr_compliant": true,
-            "pci_dss_level": "1",
+            "pci_dss_level": "designed_for_1",
             "psd3_compliant": true,
             "quantum_resistant": true
         }
@@ -1581,7 +1581,7 @@ async fn log_webhook_to_security_service(
                 "algorithm": verification.algorithm
             },
             "compliance": {
-                "pci_dss_level": "1",
+                "pci_dss_level": "designed_for_1",
                 "quantum_resistant": true,
                 "immutable_logged": true
             }
