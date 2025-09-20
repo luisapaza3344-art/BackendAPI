@@ -35,6 +35,22 @@ args = "Enterprise API Gateway"
 task = "workflow.run"
 args = "Enterprise Message Queue"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "AI Fraud Detection"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Blockchain Integration"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Advanced Analytics"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Quantum Key Distribution"
+
 [[workflows.workflow]]
 name = "Payment Gateway"
 author = "agent"
@@ -105,6 +121,50 @@ args = "cd services/python/message-queue-service && python main.py"
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "AI Fraud Detection"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/python/ai-fraud-detection-service && python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Blockchain Integration"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/python/blockchain-integration-service && python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Advanced Analytics"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/python/advanced-analytics-service && python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow]]
+name = "Quantum Key Distribution"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/python/quantum-key-distribution-service && python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 8000
 externalPort = 8000
@@ -127,4 +187,4 @@ externalPort = 3000
 
 [nix]
 channel = "stable-25_05"
-packages = ["cargo", "libiconv", "libuv", "libxcrypt", "openssl", "pkg-config", "rustc"]
+packages = ["cargo", "glibcLocales", "libiconv", "libuv", "libxcrypt", "openssl", "pkg-config", "redis", "rustc", "xsimd"]
