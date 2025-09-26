@@ -106,8 +106,8 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "cd services/rust/ultra-inventory-system && RUST_LOG=info INVENTORY_PORT=8000 DATABASE_URL=$DATABASE_URL REDIS_URL=\"redis://localhost:6379\" cargo run --release"
-waitForPort = 8000
+args = "cd services/rust/ultra-inventory-system && RUST_LOG=info INVENTORY_PORT=3000 DATABASE_URL=$DATABASE_URL REDIS_URL=\"redis://localhost:6379\" cargo run --release"
+waitForPort = 3000
 
 [[workflows.workflow]]
 name = "Ultra Shipping Service"
@@ -122,12 +122,20 @@ args = "cd services/rust/ultra-shipping-service && PORT=6800 cargo run --release
 waitForPort = 6800
 
 [[ports]]
+localPort = 3000
+externalPort = 3003
+
+[[ports]]
 localPort = 6800
 externalPort = 6800
 
 [[ports]]
 localPort = 8000
 externalPort = 8000
+
+[[ports]]
+localPort = 8080
+externalPort = 80
 
 [[ports]]
 localPort = 8083
