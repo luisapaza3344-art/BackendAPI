@@ -1,0 +1,38 @@
+[package]
+name = "ultra-inventory-system"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ultra-inventory-system"
+path = "src/main.rs"
+
+[dependencies]
+tokio = { version = "1.40.0", features = ["full"] }
+axum = { version = "0.7.7", features = ["macros"] }
+serde = { version = "1.0.210", features = ["derive"] }
+serde_json = "1.0.128"
+reqwest = { version = "0.12.8", features = ["json", "rustls-tls"] }
+uuid = { version = "1.10.0", features = ["v4", "serde"] }
+chrono = { version = "0.4.38", features = ["serde"] }
+sqlx = { version = "0.8.2", features = ["runtime-tokio-rustls", "postgres", "uuid", "chrono"] }
+anyhow = "1.0.89"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+tower = "0.5.1"
+tower-http = { version = "0.6.1", features = ["cors", "trace"] }
+rust_decimal = { version = "1.36.0", features = ["serde-float"] }
+redis = { version = "0.25.4", features = ["tokio-comp"] }
+# Lightweight ML and math libraries
+ndarray = "0.16.1"
+num-traits = "0.2.19"
+
+[features]
+default = ["ultra-professional", "ai-forecasting", "multi-warehouse", "real-time-sync"]
+ultra-professional = []
+ai-forecasting = []
+multi-warehouse = []
+real-time-sync = []
+advanced-analytics = []
+enterprise-integration = []
+quantum-inventory = []
