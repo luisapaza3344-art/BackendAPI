@@ -10,7 +10,7 @@ import json
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, List, Optional, Tuple
 import aiohttp
 import numpy as np
@@ -191,7 +191,7 @@ class EnterpriseQuantumKeyDistributionService:
             security_parameter=0.95,
             channel_capacity=10000,  # bits/second
             noise_level=0.01,
-            created_at=datetime.now(datetime.timezone.utc).isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
         # Create SARG04 quantum channel
@@ -204,7 +204,7 @@ class EnterpriseQuantumKeyDistributionService:
             security_parameter=0.97,
             channel_capacity=8000,
             noise_level=0.008,
-            created_at=datetime.now(datetime.timezone.utc).isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
         # Create decoy state channel for enhanced security
@@ -217,7 +217,7 @@ class EnterpriseQuantumKeyDistributionService:
             security_parameter=0.99,
             channel_capacity=15000,
             noise_level=0.002,
-            created_at=datetime.now(datetime.timezone.utc).isoformat()
+            created_at=datetime.now(timezone.utc).isoformat()
         )
         
         self.active_channels = {
@@ -293,8 +293,8 @@ class EnterpriseQuantumKeyDistributionService:
                 algorithm=algorithm,
                 quantum_entropy_level=quantum_properties["entropy_level"],
                 generation_method="quantum_measurement",
-                created_at=datetime.now(datetime.timezone.utc).isoformat(),
-                expires_at=(datetime.now(datetime.timezone.utc) + timedelta(hours=24)).isoformat(),
+                created_at=datetime.now(timezone.utc).isoformat(),
+                expires_at=(datetime.now(timezone.utc) + timedelta(hours=24)).isoformat(),
                 usage_count=0,
                 max_usage=max_usage,
                 quantum_properties=quantum_properties,
@@ -464,7 +464,7 @@ class EnterpriseQuantumKeyDistributionService:
                 exchange_method=protocol,
                 quantum_channel_id=channel.channel_id,
                 session_status="establishing",
-                established_at=datetime.now(datetime.timezone.utc).isoformat(),
+                established_at=datetime.now(timezone.utc).isoformat(),
                 key_agreement_protocol=f"QKD-{protocol.upper()}",
                 quantum_error_rate=channel.error_rate,
                 authentication_verified=False,
@@ -571,7 +571,7 @@ class EnterpriseQuantumKeyDistributionService:
     
     async def _cleanup_expired_keys(self):
         """Clean up expired quantum keys"""
-        current_time = datetime.now(datetime.timezone.utc)
+        current_time = datetime.now(timezone.utc)
         expired_keys = []
         
         for key_id, key_data in self.quantum_keys.items():
@@ -584,7 +584,7 @@ class EnterpriseQuantumKeyDistributionService:
                     expires_at = datetime.fromisoformat(expires_str)
                 # Ensure comparison is timezone-aware
                 if expires_at.tzinfo is None:
-                    expires_at = expires_at.replace(tzinfo=datetime.timezone.utc)
+                    expires_at = expires_at.replace(tzinfo=timezone.utc)
                 if current_time > expires_at:
                     expired_keys.append(key_id)
             except Exception as e:
@@ -633,7 +633,7 @@ class EnterpriseQuantumKeyDistributionService:
         try:
             metrics = {
                 'service': 'quantum-key-distribution-service',
-                'timestamp': datetime.now(datetime.timezone.utc).isoformat(),
+                'timestamp': datetime.now(timezone.utc).isoformat(),
                 'quantum_channels': len(self.active_channels),
                 'active_sessions': len(self.active_sessions),
                 'generated_keys': len(self.quantum_keys),
