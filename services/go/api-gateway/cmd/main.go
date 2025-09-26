@@ -32,13 +32,16 @@ func main() {
                 logger.Fatal("Failed to initialize HSM service", "error", err)
         }
 
-        // Initialize Redis for rate limiting and session storage
+        // Initialize Redis for rate limiting and session storage (optional)
         logger.Info("🔄 Connecting to Redis for rate limiting and session management")
         redisClient, err := redis.NewFIPSRedisClient(&cfg.Redis)
         if err != nil {
-                logger.Fatal("Failed to connect to Redis", "error", err)
+                logger.Warn("⚠️ Redis unavailable, running standalone", "error", err)
+                redisClient = nil
         }
-        defer redisClient.Close()
+        if redisClient != nil {
+                defer redisClient.Close()
+        }
 
         // Initialize Prometheus metrics
         logger.Info("📊 Starting metrics collection with cryptographic attestation")
