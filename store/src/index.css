@@ -1,0 +1,214 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@100;200;300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 10%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+
+    --primary: 0 0% 10%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 0 0% 96%;
+    --secondary-foreground: 0 0% 10%;
+
+    --tertiary: 0 0% 90%;
+    --tertiary-foreground: 0 0% 10%;
+
+    --neutral: 0 0% 98%;
+    --neutral-foreground: 0 0% 10%;
+
+    --muted: 0 0% 96%;
+    --muted-foreground: 0 0% 45%;
+
+    --accent: 0 0% 10%;
+    --accent-foreground: 0 0% 98%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 146 50% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 43 89% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 0 0% 90%;
+    --input: 0 0% 90%;
+    --ring: 0 0% 10%;
+
+    --radius: 0px;
+
+    --gray-50: 0 0% 98%;
+    --gray-100: 0 0% 96%;
+    --gray-200: 0 0% 90%;
+    --gray-300: 0 0% 83%;
+    --gray-400: 0 0% 64%;
+    --gray-500: 0 0% 45%;
+    --gray-600: 0 0% 32%;
+    --gray-700: 0 0% 25%;
+    --gray-800: 0 0% 15%;
+    --gray-900: 0 0% 10%;
+  }
+
+  .dark {
+    --background: 0 0% 3%;
+    --foreground: 0 0% 98%;
+
+    --card: 0 0% 6%;
+    --card-foreground: 0 0% 98%;
+
+    --popover: 0 0% 6%;
+    --popover-foreground: 0 0% 98%;
+
+    --primary: 0 0% 98%;
+    --primary-foreground: 0 0% 10%;
+
+    --secondary: 0 0% 10%;
+    --secondary-foreground: 0 0% 98%;
+
+    --tertiary: 0 0% 15%;
+    --tertiary-foreground: 0 0% 98%;
+
+    --neutral: 0 0% 8%;
+    --neutral-foreground: 0 0% 98%;
+
+    --muted: 0 0% 10%;
+    --muted-foreground: 0 0% 60%;
+
+    --accent: 0 0% 98%;
+    --accent-foreground: 0 0% 10%;
+
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 98%;
+
+    --success: 146 50% 36%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 43 89% 38%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
+    --ring: 0 0% 98%;
+
+    --gray-50: 0 0% 10%;
+    --gray-100: 0 0% 15%;
+    --gray-200: 0 0% 20%;
+    --gray-300: 0 0% 30%;
+    --gray-400: 0 0% 40%;
+    --gray-500: 0 0% 50%;
+    --gray-600: 0 0% 60%;
+    --gray-700: 0 0% 70%;
+    --gray-800: 0 0% 80%;
+    --gray-900: 0 0% 90%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  html, body {
+    @apply bg-background text-foreground font-light transition-colors duration-300;
+  }
+  
+  body {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    line-height: 1.6;
+  }
+  
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Inter', sans-serif;
+    font-weight: 300;
+    line-height: 1.2;
+  }
+
+  /* Ensure all components use theme colors */
+  .bg-white {
+    @apply bg-background;
+  }
+  
+  .text-gray-900 {
+    @apply text-foreground;
+  }
+  
+  .text-gray-800 {
+    @apply text-foreground;
+  }
+  
+  .text-gray-700 {
+    @apply text-muted-foreground;
+  }
+  
+  .text-gray-600 {
+    @apply text-muted-foreground;
+  }
+  
+  .text-gray-500 {
+    @apply text-muted-foreground;
+  }
+  
+  .text-gray-400 {
+    @apply text-muted-foreground;
+  }
+  
+  .bg-gray-50 {
+    @apply bg-muted;
+  }
+  
+  .bg-gray-100 {
+    @apply bg-muted;
+  }
+  
+  .border-gray-100 {
+    @apply border-border;
+  }
+  
+  .border-gray-200 {
+    @apply border-border;
+  }
+  
+  .hover\:text-gray-900:hover {
+    @apply hover:text-foreground;
+  }
+  
+  .hover\:text-gray-600:hover {
+    @apply hover:text-muted-foreground;
+  }
+  
+  .hover\:bg-gray-50:hover {
+    @apply hover:bg-muted;
+  }
+  
+  .hover\:bg-gray-800:hover {
+    @apply hover:bg-primary/90;
+  }
+}
+
+@layer utilities {
+  .scrollbar-hide {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  
+  .line-clamp-2 {
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+}

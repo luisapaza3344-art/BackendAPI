@@ -39,6 +39,10 @@ args = "Ultra Inventory System"
 task = "workflow.run"
 args = "Ultra Shipping Service"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ultra Professional Frontend"
+
 [[workflows.workflow]]
 name = "Payment Gateway"
 author = "agent"
@@ -121,9 +125,25 @@ task = "shell.exec"
 args = "cd services/rust/ultra-shipping-service && PORT=6800 cargo run --release"
 waitForPort = 6800
 
+[[workflows.workflow]]
+name = "Ultra Professional Frontend"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd store && npm run dev"
+waitForPort = 5000
+
+[workflows.workflow.metadata]
+outputType = "webview"
+
 [[ports]]
 localPort = 3000
 externalPort = 3003
+
+[[ports]]
+localPort = 5000
+externalPort = 5000
 
 [[ports]]
 localPort = 6800
