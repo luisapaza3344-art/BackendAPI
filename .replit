@@ -31,6 +31,10 @@ args = "Enterprise API Gateway"
 task = "workflow.run"
 args = "Advanced Analytics"
 
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Ultra Inventory System"
+
 [[workflows.workflow]]
 name = "Payment Gateway"
 author = "agent"
@@ -89,13 +93,21 @@ args = "cd services/python/advanced-analytics-service && python main.py"
 [workflows.workflow.metadata]
 outputType = "console"
 
+[[workflows.workflow]]
+name = "Ultra Inventory System"
+author = "agent"
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/rust/ultra-inventory-system && RUST_LOG=info INVENTORY_PORT=8000 DATABASE_URL=$DATABASE_URL REDIS_URL=\"redis://localhost:6379\" cargo run --release"
+waitForPort = 8000
+
 [[ports]]
 localPort = 8000
 externalPort = 8000
-
-[[ports]]
-localPort = 8080
-externalPort = 8080
 
 [[ports]]
 localPort = 8099

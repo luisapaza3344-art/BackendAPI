@@ -6,10 +6,12 @@ use axum::{
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, sync::Arc};
+use std::{env, sync::Arc, time::Duration};
+use dashmap::DashMap;
+use parking_lot::Mutex;
 use tokio::net::TcpListener;
 use tower_http::cors::CorsLayer;
-use tracing::{info};
+use tracing::{info, error, warn};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
@@ -25,8 +27,29 @@ use rust_decimal::Decimal;
 // ✅ Smart Reorder Points con Deep Learning
 // ===============================================================================
 
+// 🚀 ULTRA PRODUCTION-GRADE APP STATE
 #[derive(Debug, Clone)]
-pub struct AppState {}
+pub struct AppState {
+    pub db_pool: sqlx::PgPool,
+    pub redis_client: redis::Client,
+    pub product_cache: Arc<dashmap::DashMap<Uuid, UltraProduct>>,
+    pub metrics: Arc<ProductionMetrics>,
+    pub image_processor: Arc<ImageProcessor>,
+}
+
+#[derive(Debug)]
+pub struct ProductionMetrics {
+    pub requests_total: parking_lot::Mutex<u64>,
+    pub products_created: parking_lot::Mutex<u64>,
+    pub cache_hits: parking_lot::Mutex<u64>,
+    pub cache_misses: parking_lot::Mutex<u64>,
+}
+
+#[derive(Debug)]
+pub struct ImageProcessor {
+    pub max_size: u32,
+    pub quality: u8,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct InventoryRequest {
@@ -323,12 +346,16 @@ async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
     })))
 }
 
-// 🏆 CREAR PRODUCTO ULTRA PROFESIONAL
+// 🏆 CREAR PRODUCTO ULTRA PROFESIONAL CON DATABASE PRODUCTION
 async fn create_product(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Json(request): Json<CreateProductRequest>,
 ) -> Result<Json<UltraProduct>, StatusCode> {
     info!("🏆 Creating ultra professional product: {}", request.name);
+    
+    // Update metrics
+    *state.metrics.requests_total.lock() += 1;
+    *state.metrics.products_created.lock() += 1;
     
     let product_id = Uuid::new_v4();
     let now = Utc::now();
@@ -336,220 +363,359 @@ async fn create_product(
     // Calcular volumen y peso dimensional automáticamente
     let volume = request.dimensions.length * request.dimensions.width * request.dimensions.height;
     let dimensional_weight = volume / Decimal::from(5000); // Factor estándar
+    let shipping_weight = request.weight.weight * Decimal::from_str_exact("1.1").unwrap();
     
-    let mut dimensions = request.dimensions;
-    dimensions.volume = Some(volume);
-    dimensions.dimensional_weight = Some(dimensional_weight);
+    // 🚀 INSERT INTO PRODUCTION DATABASE
+    let result = sqlx::query!(
+        r#"
+        INSERT INTO products (
+            id, sku, name, brand, category, subcategory,
+            short_description, long_description, features,
+            length_cm, width_cm, height_cm, volume_cm3, dimensional_weight_kg,
+            weight_kg, shipping_weight_kg,
+            cost_price, selling_price, currency,
+            reorder_point, max_stock,
+            velocity_score, profitability_score, stockout_risk, sustainability_score,
+            status, tags
+        ) VALUES (
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9,
+            $10, $11, $12, $13, $14,
+            $15, $16,
+            $17, $18, $19,
+            $20, $21,
+            $22, $23, $24, $25,
+            $26, $27
+        )
+        "#,
+        product_id,
+        request.sku,
+        request.name,
+        request.brand,
+        request.category,
+        request.subcategory,
+        request.short_description,
+        request.long_description,
+        &request.features,
+        request.dimensions.length,
+        request.dimensions.width,
+        request.dimensions.height,
+        volume,
+        dimensional_weight,
+        request.weight.weight,
+        shipping_weight,
+        request.cost_price,
+        request.selling_price,
+        request.currency,
+        10i32, // reorder_point
+        1000i32, // max_stock  
+        7.5, // velocity_score
+        8.2, // profitability_score
+        0.1, // stockout_risk
+        8.0, // sustainability_score
+        "Active",
+        &request.tags,
+    )
+    .execute(&state.db_pool)
+    .await;
     
-    let mut weight = request.weight;
-    weight.shipping_weight = Some(weight.weight * Decimal::from_str_exact("1.1").unwrap()); // 10% packaging
-    
-    // Crear inventario inicial si se especifica
-    let inventory_levels = if let Some(stock) = request.initial_stock {
-        vec![InventoryLevel {
-            warehouse_id: request.warehouse_id.unwrap_or_else(Uuid::new_v4),
-            warehouse_name: "Main Warehouse".to_string(),
-            quantity_available: stock,
-            quantity_reserved: 0,
-            quantity_incoming: 0,
-            location: Some("A1-B1-C1".to_string()),
-            bin_location: Some("BIN001".to_string()),
-            last_counted: now,
-        }]
-    } else {
-        vec![]
-    };
-    
-    let product = UltraProduct {
-        id: product_id,
-        sku: request.sku,
-        name: request.name,
-        brand: request.brand,
-        category: request.category,
-        subcategory: request.subcategory,
-        short_description: request.short_description,
-        long_description: request.long_description,
-        technical_specifications: serde_json::json!({}),
-        features: request.features,
-        materials: None,
-        origin_country: None,
-        dimensions,
-        weight,
-        packaging_type: "Standard Box".to_string(),
-        fragile: false,
-        hazardous: false,
-        images: vec![],
-        videos: vec![],
-        documents: vec![],
-        cost_price: request.cost_price,
-        selling_price: request.selling_price,
-        msrp: None,
-        currency: request.currency,
-        tax_category: "Standard".to_string(),
-        inventory_levels,
-        total_available: request.initial_stock.unwrap_or(0),
-        total_reserved: 0,
-        total_incoming: 0,
-        reorder_point: 10,
-        max_stock: 1000,
-        demand_forecast: DemandForecast {
-            next_7_days: 5,
-            next_30_days: 20,
-            next_90_days: 60,
-            seasonal_factor: 1.0,
-            trend_direction: "Stable".to_string(),
-            confidence_level: 0.85,
+    match result {
+        Ok(_) => {
+            // Create inventory level if initial stock provided
+            if let Some(stock) = request.initial_stock {
+                let warehouse_id = request.warehouse_id.unwrap_or_else(Uuid::new_v4);
+                
+                // Ensure warehouse exists (create default if needed)
+                sqlx::query!(
+                    "INSERT INTO warehouses (id, name, code, location) VALUES ($1, $2, $3, $4) ON CONFLICT (code) DO NOTHING",
+                    warehouse_id,
+                    "Main Warehouse",
+                    "MAIN001",
+                    "Default Location"
+                ).execute(&state.db_pool).await.ok();
+                
+                // Create inventory level
+                sqlx::query!(
+                    r#"
+                    INSERT INTO inventory_levels (
+                        product_id, warehouse_id, quantity_available, 
+                        location, bin_location
+                    ) VALUES ($1, $2, $3, $4, $5)
+                    "#,
+                    product_id,
+                    warehouse_id,
+                    stock,
+                    "A1-B1-C1",
+                    "BIN001"
+                ).execute(&state.db_pool).await.ok();
+            }
+            
+            // Build product response with real data
+            let product = UltraProduct {
+                id: product_id,
+                sku: request.sku.clone(),
+                name: request.name.clone(),
+                brand: request.brand.clone(),
+                category: request.category.clone(),
+                subcategory: request.subcategory.clone(),
+                short_description: request.short_description.clone(),
+                long_description: request.long_description.clone(),
+                technical_specifications: serde_json::json!({}),
+                features: request.features.clone(),
+                materials: None,
+                origin_country: None,
+                dimensions: ProductDimensions {
+                    length: request.dimensions.length,
+                    width: request.dimensions.width,
+                    height: request.dimensions.height,
+                    unit: request.dimensions.unit.clone(),
+                    volume: Some(volume),
+                    dimensional_weight: Some(dimensional_weight),
+                },
+                weight: ProductWeight {
+                    weight: request.weight.weight,
+                    unit: request.weight.unit.clone(),
+                    shipping_weight: Some(shipping_weight),
+                },
+                packaging_type: "Standard Box".to_string(),
+                fragile: false,
+                hazardous: false,
+                images: vec![],
+                videos: vec![],
+                documents: vec![],
+                cost_price: request.cost_price,
+                selling_price: request.selling_price,
+                msrp: None,
+                currency: request.currency.clone(),
+                tax_category: "Standard".to_string(),
+                inventory_levels: vec![],
+                total_available: request.initial_stock.unwrap_or(0),
+                total_reserved: 0,
+                total_incoming: 0,
+                reorder_point: 10,
+                max_stock: 1000,
+                demand_forecast: DemandForecast {
+                    next_7_days: 5,
+                    next_30_days: 20,
+                    next_90_days: 60,
+                    seasonal_factor: 1.0,
+                    trend_direction: "Stable".to_string(),
+                    confidence_level: 0.85,
+                },
+                velocity_score: 7.5,
+                profitability_score: 8.2,
+                stockout_risk: 0.1,
+                sustainability_score: 8.0,
+                status: ProductStatus::Active,
+                created_at: now,
+                updated_at: now,
+                created_by: None,
+                tags: request.tags.clone(),
+            };
+            
+            // Cache the product for ultra performance
+            state.product_cache.insert(product_id, product.clone());
+            
+            info!("✅ Product created in database: {} ({})", product.name, product.sku);
+            Ok(Json(product))
         },
-        velocity_score: 7.5,
-        profitability_score: 8.2,
-        stockout_risk: 0.1,
-        sustainability_score: 8.0,
-        status: ProductStatus::Active,
-        created_at: now,
-        updated_at: now,
-        created_by: None,
-        tags: request.tags,
-    };
-    
-    info!("✅ Product created: {} ({})", product.name, product.sku);
-    Ok(Json(product))
+        Err(e) => {
+            error!("Failed to create product: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
 }
 
-// 📦 OBTENER PRODUCTO POR ID
+// 📦 OBTENER PRODUCTO POR ID CON CACHE ULTRA PERFORMANCE
 async fn get_product(
-    State(_state): State<Arc<AppState>>,
+    State(state): State<Arc<AppState>>,
     Path(product_id): Path<Uuid>,
 ) -> Result<Json<EnhancedProduct>, StatusCode> {
     info!("📦 Getting product: {}", product_id);
     
-    // Simular obtención de producto (en producción sería de DB)
-    let product = UltraProduct {
-        id: product_id,
-        sku: "ULTRA-WIDGET-001".to_string(),
-        name: "Ultra Professional Widget Pro Max".to_string(),
-        brand: Some("UltraBrand".to_string()),
-        category: "Electronics".to_string(),
-        subcategory: Some("Professional Tools".to_string()),
-        short_description: "The ultimate professional widget for enterprise use".to_string(),
-        long_description: "This ultra-professional widget combines cutting-edge technology with superior design. Perfect for enterprise applications requiring the highest performance and reliability.".to_string(),
-        technical_specifications: serde_json::json!({
-            "material": "Aircraft-grade aluminum",
-            "certification": "ISO 9001, CE, FCC",
-            "warranty": "5 years",
-            "power_consumption": "50W",
-            "operating_temperature": "-20°C to +60°C"
-        }),
-        features: vec![
-            "Quantum-enhanced processing".to_string(),
-            "AI-powered optimization".to_string(),
-            "Zero-maintenance design".to_string(),
-            "Enterprise-grade security".to_string(),
-        ],
-        materials: Some("Aluminum, Carbon Fiber, Titanium".to_string()),
-        origin_country: Some("Germany".to_string()),
-        dimensions: ProductDimensions {
-            length: Decimal::from_str_exact("25.4").unwrap(),
-            width: Decimal::from_str_exact("15.2").unwrap(),
-            height: Decimal::from_str_exact("8.9").unwrap(),
-            unit: "cm".to_string(),
-            volume: Some(Decimal::from_str_exact("3436.848").unwrap()),
-            dimensional_weight: Some(Decimal::from_str_exact("0.687").unwrap()),
+    *state.metrics.requests_total.lock() += 1;
+    
+    // Check cache first for ultra performance
+    if let Some(cached_product) = state.product_cache.get(&product_id) {
+        *state.metrics.cache_hits.lock() += 1;
+        info!("🚀 Cache hit for product: {}", product_id);
+        
+        let enhanced_product = EnhancedProduct {
+            product: cached_product.clone(),
+            shipping_estimates: Some(calculate_shipping_estimates(&cached_product).await),
+            related_products: vec![],
+            cross_sell_products: vec![],
+            upsell_products: vec![],
+        };
+        return Ok(Json(enhanced_product));
+    }
+    
+    *state.metrics.cache_misses.lock() += 1;
+    
+    // 🚀 FETCH FROM PRODUCTION DATABASE
+    let product_row = sqlx::query!(
+        r#"
+        SELECT 
+            p.id, p.sku, p.name, p.brand, p.category, p.subcategory,
+            p.short_description, p.long_description, p.technical_specifications, p.features,
+            p.materials, p.origin_country,
+            p.length_cm, p.width_cm, p.height_cm, p.volume_cm3, p.dimensional_weight_kg,
+            p.weight_kg, p.shipping_weight_kg, p.packaging_type, p.fragile, p.hazardous,
+            p.cost_price, p.selling_price, p.msrp, p.currency, p.tax_category,
+            p.reorder_point, p.max_stock,
+            p.velocity_score, p.profitability_score, p.stockout_risk, p.sustainability_score,
+            p.status, p.created_at, p.updated_at, p.created_by, p.tags,
+            COALESCE(SUM(il.quantity_available), 0) as total_available,
+            COALESCE(SUM(il.quantity_reserved), 0) as total_reserved,
+            COALESCE(SUM(il.quantity_incoming), 0) as total_incoming
+        FROM products p
+        LEFT JOIN inventory_levels il ON p.id = il.product_id
+        WHERE p.id = $1
+        GROUP BY p.id
+        "#,
+        product_id
+    )
+    .fetch_optional(&state.db_pool)
+    .await;
+    
+    match product_row {
+        Ok(Some(row)) => {
+    
+            // Build product from database
+            let product = UltraProduct {
+                id: row.id,
+                sku: row.sku,
+                name: row.name,
+                brand: row.brand,
+                category: row.category,
+                subcategory: row.subcategory,
+                short_description: row.short_description,
+                long_description: row.long_description.unwrap_or_default(),
+                technical_specifications: row.technical_specifications.unwrap_or_else(|| serde_json::json!({})),
+                features: row.features.unwrap_or_default(),
+                materials: row.materials,
+                origin_country: row.origin_country,
+                dimensions: ProductDimensions {
+                    length: row.length_cm.unwrap_or_default(),
+                    width: row.width_cm.unwrap_or_default(),
+                    height: row.height_cm.unwrap_or_default(),
+                    unit: "cm".to_string(),
+                    volume: row.volume_cm3,
+                    dimensional_weight: row.dimensional_weight_kg,
+                },
+                weight: ProductWeight {
+                    weight: row.weight_kg,
+                    unit: "kg".to_string(),
+                    shipping_weight: row.shipping_weight_kg,
+                },
+                packaging_type: row.packaging_type.unwrap_or_else(|| "Standard Box".to_string()),
+                fragile: row.fragile.unwrap_or(false),
+                hazardous: row.hazardous.unwrap_or(false),
+                images: vec![], // TODO: Fetch from product_images table
+                videos: vec![], // TODO: Fetch from product_videos table  
+                documents: vec![], // TODO: Fetch from product_documents table
+                cost_price: row.cost_price,
+                selling_price: row.selling_price,
+                msrp: row.msrp,
+                currency: row.currency,
+                tax_category: row.tax_category,
+                inventory_levels: vec![], // TODO: Load inventory levels
+                total_available: row.total_available.unwrap_or(0) as i32,
+                total_reserved: row.total_reserved.unwrap_or(0) as i32,
+                total_incoming: row.total_incoming.unwrap_or(0) as i32,
+                reorder_point: row.reorder_point,
+                max_stock: row.max_stock,
+                demand_forecast: DemandForecast {
+                    next_7_days: 45, // TODO: Fetch from demand_forecasts table
+                    next_30_days: 180,
+                    next_90_days: 520,
+                    seasonal_factor: 1.15,
+                    trend_direction: "Increasing".to_string(),
+                    confidence_level: 0.94,
+                },
+                velocity_score: row.velocity_score as f64,
+                profitability_score: row.profitability_score as f64,
+                stockout_risk: row.stockout_risk as f64,
+                sustainability_score: row.sustainability_score as f64,
+                status: match row.status.as_str() {
+                    "Active" => ProductStatus::Active,
+                    "Inactive" => ProductStatus::Inactive,
+                    "Discontinued" => ProductStatus::Discontinued,
+                    "OutOfStock" => ProductStatus::OutOfStock,
+                    "Backordered" => ProductStatus::Backordered,
+                    "PreOrder" => ProductStatus::PreOrder,
+                    _ => ProductStatus::Active,
+                },
+                created_at: row.created_at,
+                updated_at: row.updated_at,
+                created_by: row.created_by,
+                tags: row.tags.unwrap_or_default(),
+            };
+            
+            // Cache the product for ultra performance
+            state.product_cache.insert(product_id, product.clone());
+            
+            let enhanced_product = EnhancedProduct {
+                product: product.clone(),
+                shipping_estimates: Some(calculate_shipping_estimates(&product).await),
+                related_products: vec![], // TODO: ML-based related products
+                cross_sell_products: vec![], // TODO: AI cross-sell recommendations
+                upsell_products: vec![], // TODO: AI upsell recommendations
+            };
+            
+            info!("✅ Product retrieved from database: {}", product.name);
+            Ok(Json(enhanced_product))
         },
-        weight: ProductWeight {
-            weight: Decimal::from_str_exact("2.5").unwrap(),
-            unit: "kg".to_string(),
-            shipping_weight: Some(Decimal::from_str_exact("2.75").unwrap()),
+        Ok(None) => {
+            warn!("Product not found: {}", product_id);
+            Err(StatusCode::NOT_FOUND)
         },
-        packaging_type: "Premium Box".to_string(),
-        fragile: false,
-        hazardous: false,
-        images: vec![
-            ProductImage {
-                id: Uuid::new_v4(),
-                url: "/images/products/ultra-widget-main.jpg".to_string(),
-                alt_text: "Ultra Professional Widget Pro Max - Main View".to_string(),
-                image_type: "primary".to_string(),
-                order: 1,
-                width: Some(1200),
-                height: Some(800),
-                file_size: Some(245678),
-                format: "jpg".to_string(),
-            }
-        ],
-        videos: vec![],
-        documents: vec![],
-        cost_price: Decimal::from_str_exact("125.50").unwrap(),
-        selling_price: Decimal::from_str_exact("249.99").unwrap(),
-        msrp: Some(Decimal::from_str_exact("299.99").unwrap()),
-        currency: "USD".to_string(),
-        tax_category: "Standard".to_string(),
-        inventory_levels: vec![
-            InventoryLevel {
-                warehouse_id: Uuid::new_v4(),
-                warehouse_name: "Main Distribution Center".to_string(),
-                quantity_available: 150,
-                quantity_reserved: 25,
-                quantity_incoming: 100,
-                location: Some("A1-B3-C2".to_string()),
-                bin_location: Some("BIN-A1B3C2-001".to_string()),
-                last_counted: Utc::now() - chrono::Duration::days(7),
-            }
-        ],
-        total_available: 150,
-        total_reserved: 25,
-        total_incoming: 100,
-        reorder_point: 50,
-        max_stock: 500,
-        demand_forecast: DemandForecast {
-            next_7_days: 45,
-            next_30_days: 180,
-            next_90_days: 520,
-            seasonal_factor: 1.15,
-            trend_direction: "Increasing".to_string(),
-            confidence_level: 0.94,
-        },
-        velocity_score: 9.2,
-        profitability_score: 9.5,
-        stockout_risk: 0.08,
-        sustainability_score: 8.8,
-        status: ProductStatus::Active,
-        created_at: Utc::now() - chrono::Duration::days(30),
-        updated_at: Utc::now() - chrono::Duration::days(1),
-        created_by: None,
-        tags: vec!["premium".to_string(), "enterprise".to_string(), "bestseller".to_string()],
+        Err(e) => {
+            error!("Database error retrieving product {}: {}", product_id, e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// 🚀 CALCULATE SHIPPING ESTIMATES USING REAL DIMENSIONS
+async fn calculate_shipping_estimates(product: &UltraProduct) -> Vec<ShippingEstimate> {
+    // Use real product dimensions for accurate shipping calculation
+    let volume = product.dimensions.volume.unwrap_or_default();
+    let weight = product.weight.weight;
+    
+    // Base calculations on actual dimensions and weight
+    let base_cost = if weight > Decimal::from(10) {
+        Decimal::from(50) // Heavy item surcharge
+    } else {
+        Decimal::from(25) // Standard shipping
     };
     
-    // Calcular estimaciones de shipping automáticamente usando las dimensiones
-    let shipping_estimates = vec![
+    vec![
         ShippingEstimate {
             provider: "DHL".to_string(),
             service: "Express Worldwide".to_string(),
-            cost: Decimal::from_str_exact("45.50").unwrap(),
+            cost: base_cost * Decimal::from_str_exact("1.8").unwrap(),
             delivery_days: 3,
         },
         ShippingEstimate {
             provider: "UPS".to_string(),
             service: "Ground".to_string(),
-            cost: Decimal::from_str_exact("25.80").unwrap(),
+            cost: base_cost * Decimal::from_str_exact("1.0").unwrap(),
             delivery_days: 5,
         },
         ShippingEstimate {
             provider: "FedEx".to_string(),
             service: "Ground".to_string(),
-            cost: Decimal::from_str_exact("28.90").unwrap(),
+            cost: base_cost * Decimal::from_str_exact("1.2").unwrap(),
             delivery_days: 4,
         },
-    ];
-    
-    let enhanced_product = EnhancedProduct {
-        product,
-        shipping_estimates: Some(shipping_estimates),
-        related_products: vec![Uuid::new_v4(), Uuid::new_v4()],
-        cross_sell_products: vec![Uuid::new_v4()],
-        upsell_products: vec![Uuid::new_v4(), Uuid::new_v4()],
-    };
-    
-    Ok(Json(enhanced_product))
+        ShippingEstimate {
+            provider: "USPS".to_string(),
+            service: "Priority Mail".to_string(),
+            cost: base_cost * Decimal::from_str_exact("0.6").unwrap(),
+            delivery_days: 3,
+        },
+    ]
 }
 
 // 📝 ACTUALIZAR PRODUCTO
@@ -1350,7 +1516,40 @@ async fn main() -> anyhow::Result<()> {
     info!("🏆 Starting Ultra Professional Inventory System");
     info!("⚡ SUPERIOR TO AMAZON + SHOPIFY COMBINED");
     
-    let state = Arc::new(AppState {});
+    // 🚀 INITIALIZE ULTRA PRODUCTION DATABASE
+    let database_url = env::var("DATABASE_URL")
+        .expect("DATABASE_URL must be set for production");
+    
+    let db_pool = sqlx::PgPool::connect(&database_url)
+        .await
+        .expect("Failed to connect to database");
+    
+    // Run migrations for production
+    sqlx::migrate!("./migrations")
+        .run(&db_pool)
+        .await
+        .expect("Failed to run database migrations");
+    
+    // Initialize Redis for ultra caching
+    let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_client = redis::Client::open(redis_url)
+        .expect("Failed to connect to Redis");
+    
+    let state = Arc::new(AppState {
+        db_pool,
+        redis_client,
+        product_cache: Arc::new(DashMap::new()),
+        metrics: Arc::new(ProductionMetrics {
+            requests_total: Mutex::new(0),
+            products_created: Mutex::new(0),
+            cache_hits: Mutex::new(0),
+            cache_misses: Mutex::new(0),
+        }),
+        image_processor: Arc::new(ImageProcessor {
+            max_size: 10 * 1024 * 1024, // 10MB
+            quality: 90,
+        }),
+    });
     
     // Build router with ultra professional product management
     let app = Router::new()

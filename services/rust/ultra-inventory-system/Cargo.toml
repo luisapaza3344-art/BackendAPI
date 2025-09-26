@@ -27,6 +27,20 @@ redis = { version = "0.25.4", features = ["tokio-comp"] }
 ndarray = "0.16.1"
 num-traits = "0.2.19"
 
+# 🚀 ULTRA PRODUCTION-GRADE SCALABLE DEPENDENCIES
+deadpool = { version = "0.12", features = ["managed", "rt_tokio_1"] }
+deadpool-postgres = "0.14"
+deadpool-redis = "0.16"
+image = { version = "0.25", features = ["jpeg", "png", "webp"] }
+mime = "0.3"
+thiserror = "1.0"
+tokio-metrics = "0.3"
+metrics = "0.23"
+dashmap = "6.0"
+async-compression = { version = "0.4", features = ["gzip", "tokio"] }
+parking_lot = "0.12"
+rayon = "1.10"
+
 [features]
 default = ["ultra-professional", "ai-forecasting", "multi-warehouse", "real-time-sync"]
 ultra-professional = []
