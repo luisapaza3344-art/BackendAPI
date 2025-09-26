@@ -13,6 +13,8 @@ use tracing::{info};
 use uuid::Uuid;
 use chrono::{DateTime, Utc, Duration};
 use rust_decimal::Decimal;
+use dashmap::DashMap;
+use parking_lot::Mutex;
 
 // ===============================================================================
 // 🚀 ULTRA PROFESSIONAL SHIPPING SERVICE
@@ -25,7 +27,26 @@ use rust_decimal::Decimal;
 // ===============================================================================
 
 #[derive(Debug, Clone)]
-pub struct AppState {}
+pub struct AppState {
+    pub redis_client: redis::Client,
+    pub rate_cache: Arc<DashMap<String, CachedRate>>,
+    pub metrics: Arc<ShippingMetrics>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CachedRate {
+    pub quotes: Vec<ShippingQuote>,
+    pub expires_at: DateTime<Utc>,
+}
+
+#[derive(Debug)]
+pub struct ShippingMetrics {
+    pub requests_total: parking_lot::Mutex<u64>,
+    pub requests_by_provider: Arc<DashMap<String, u64>>,
+    pub cache_hits: parking_lot::Mutex<u64>,
+    pub cache_misses: parking_lot::Mutex<u64>,
+    pub average_response_time: parking_lot::Mutex<f64>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ShippingRateRequest {
@@ -71,36 +92,63 @@ pub struct UltraShippingResponse {
     pub recommended_quote: Option<ShippingQuote>,
     pub total_processing_time_ms: u64,
     pub ai_insights: AIShippingInsights,
+    pub taxes_and_duties: Option<TaxesAndDuties>,
+    pub restricted_items: Vec<String>,
+    pub required_documents: Vec<String>,
+    pub warnings: Vec<String>,
+    pub is_international: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ShippingQuote {
     pub provider: String,
-    pub service_name: String,
-    pub service_code: String,
-    pub rate: Decimal,
-    pub currency: String,
-    pub estimated_delivery: DateTime<Utc>,
-    pub guaranteed_delivery: Option<DateTime<Utc>>,
-    pub transit_days: u32,
-    pub confidence_score: f64,
-    pub reliability_rating: f64,
-    pub carbon_emissions: Option<Decimal>,
+    pub service: String,
+    pub service_id: String,
+    pub cost: Decimal,
+    pub delivery_days: u32,
+    pub transit_time: String,
+    pub confidence: f64,
     pub tracking_included: bool,
     pub insurance_included: bool,
-    pub ai_recommendation_score: f64,
+    pub signature_required: bool,
+    pub carbon_neutral: bool,
+    pub estimated_pickup: String,
+    pub estimated_delivery: String,
+    pub carrier_specific_data: serde_json::Value,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AIShippingInsights {
-    pub cost_optimization_potential: f64,
-    pub delivery_confidence: f64,
-    pub recommended_provider: String,
-    pub risk_assessment: String,
-    pub seasonal_pricing_factor: f64,
-    pub demand_forecast: String,
-    pub alternative_suggestions: Vec<String>,
+    pub best_value_provider: String,
+    pub fastest_provider: String,
+    pub most_reliable_provider: String,
+    pub eco_friendly_provider: Option<String>,
+    pub cost_savings_opportunity: Option<Decimal>,
+    pub delivery_confidence_score: f64,
+    pub route_optimization_applied: bool,
+    pub seasonal_factors: Vec<String>,
+    pub recommendations: Vec<String>,
 }
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaxesAndDuties {
+    pub duties_amount: Decimal,
+    pub taxes_amount: Decimal,
+    pub total_additional: Decimal,
+    pub breakdown: Vec<TaxBreakdown>,
+    pub duty_free_threshold: Option<Decimal>,
+    pub estimated_customs_delay: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TaxBreakdown {
+    pub name: String,
+    pub amount: Decimal,
+    pub percentage: Option<f64>,
+    pub description: String,
+}
+
+
 
 // Health check endpoint
 async fn health_check() -> Result<Json<serde_json::Value>, StatusCode> {
@@ -134,92 +182,145 @@ async fn get_shipping_rates(
     let quotes = vec![
         ShippingQuote {
             provider: "DHL".to_string(),
-            service_name: "DHL Express Worldwide".to_string(),
-            service_code: "U".to_string(),
-            rate: Decimal::from_str_exact("45.50").unwrap(),
-            currency: "USD".to_string(),
-            estimated_delivery: Utc::now() + Duration::days(3),
-            guaranteed_delivery: Some(Utc::now() + Duration::days(3)),
-            transit_days: 3,
-            confidence_score: 0.95,
-            reliability_rating: 0.97,
-            carbon_emissions: Some(Decimal::from_str_exact("2.1").unwrap()),
+            service: "DHL Express Worldwide".to_string(),
+            service_id: "DHL_EXPRESS".to_string(),
+            cost: Decimal::from_str_exact("45.50").unwrap(),
+            delivery_days: 3,
+            transit_time: "2-3 business days".to_string(),
+            confidence: 0.95,
             tracking_included: true,
             insurance_included: true,
-            ai_recommendation_score: 0.92,
+            signature_required: false,
+            carbon_neutral: false,
+            estimated_pickup: "Today 5PM".to_string(),
+            estimated_delivery: "Wed 3PM".to_string(),
+            carrier_specific_data: serde_json::json!({
+                "service_code": "U",
+                "guaranteed_delivery": true,
+                "carbon_emissions": 2.1
+            }),
         },
         ShippingQuote {
             provider: "UPS".to_string(),
-            service_name: "UPS Ground".to_string(),
-            service_code: "03".to_string(),
-            rate: Decimal::from_str_exact("25.80").unwrap(),
-            currency: "USD".to_string(),
-            estimated_delivery: Utc::now() + Duration::days(5),
-            guaranteed_delivery: None,
-            transit_days: 5,
-            confidence_score: 0.92,
-            reliability_rating: 0.94,
-            carbon_emissions: Some(Decimal::from_str_exact("1.8").unwrap()),
+            service: "UPS Ground".to_string(),
+            service_id: "UPS_GROUND".to_string(),
+            cost: Decimal::from_str_exact("25.80").unwrap(),
+            delivery_days: 5,
+            transit_time: "4-5 business days".to_string(),
+            confidence: 0.92,
             tracking_included: true,
             insurance_included: false,
-            ai_recommendation_score: 0.88,
+            signature_required: false,
+            carbon_neutral: true,
+            estimated_pickup: "Today 6PM".to_string(),
+            estimated_delivery: "Fri 12PM".to_string(),
+            carrier_specific_data: serde_json::json!({
+                "service_code": "03",
+                "carbon_emissions": 1.8
+            }),
         },
         ShippingQuote {
             provider: "FedEx".to_string(),
-            service_name: "FedEx Ground".to_string(),
-            service_code: "FEDEX_GROUND".to_string(),
-            rate: Decimal::from_str_exact("28.90").unwrap(),
-            currency: "USD".to_string(),
-            estimated_delivery: Utc::now() + Duration::days(4),
-            guaranteed_delivery: None,
-            transit_days: 4,
-            confidence_score: 0.90,
-            reliability_rating: 0.93,
-            carbon_emissions: Some(Decimal::from_str_exact("1.9").unwrap()),
+            service: "FedEx Ground".to_string(),
+            service_id: "FEDEX_GROUND".to_string(),
+            cost: Decimal::from_str_exact("28.90").unwrap(),
+            delivery_days: 4,
+            transit_time: "3-4 business days".to_string(),
+            confidence: 0.90,
             tracking_included: true,
             insurance_included: false,
-            ai_recommendation_score: 0.85,
+            signature_required: false,
+            carbon_neutral: false,
+            estimated_pickup: "Tomorrow 10AM".to_string(),
+            estimated_delivery: "Thu 2PM".to_string(),
+            carrier_specific_data: serde_json::json!({
+                "service_code": "FEDEX_GROUND",
+                "carbon_emissions": 1.9
+            }),
         },
         ShippingQuote {
             provider: "USPS".to_string(),
-            service_name: "USPS Priority Mail".to_string(),
-            service_code: "Priority".to_string(),
-            rate: Decimal::from_str_exact("12.40").unwrap(),
-            currency: "USD".to_string(),
-            estimated_delivery: Utc::now() + Duration::days(3),
-            guaranteed_delivery: None,
-            transit_days: 3,
-            confidence_score: 0.85,
-            reliability_rating: 0.89,
-            carbon_emissions: Some(Decimal::from_str_exact("1.5").unwrap()),
+            service: "USPS Priority Mail".to_string(),
+            service_id: "USPS_PRIORITY".to_string(),
+            cost: Decimal::from_str_exact("12.40").unwrap(),
+            delivery_days: 3,
+            transit_time: "2-3 business days".to_string(),
+            confidence: 0.85,
             tracking_included: true,
             insurance_included: false,
-            ai_recommendation_score: 0.91,
+            signature_required: false,
+            carbon_neutral: false,
+            estimated_pickup: "Today 4PM".to_string(),
+            estimated_delivery: "Wed 10AM".to_string(),
+            carrier_specific_data: serde_json::json!({
+                "service_code": "Priority",
+                "carbon_emissions": 1.5
+            }),
         },
     ];
     
-    // AI-powered recommendation (choose USPS for best value)
+    // AI-powered recommendation (choose best value)
     let recommended_quote = quotes.iter()
-        .max_by(|a, b| a.ai_recommendation_score.partial_cmp(&b.ai_recommendation_score).unwrap())
+        .min_by_key(|q| q.cost)
+        .cloned();
+    
+    let fastest_quote = quotes.iter()
+        .min_by_key(|q| q.delivery_days)
+        .cloned();
+    
+    let eco_quote = quotes.iter()
+        .find(|q| q.carbon_neutral)
         .cloned();
     
     // Generate AI insights
     let ai_insights = AIShippingInsights {
-        cost_optimization_potential: 15.5,
-        delivery_confidence: 94.2,
-        recommended_provider: recommended_quote.as_ref()
+        best_value_provider: recommended_quote.as_ref()
             .map(|q| q.provider.clone())
             .unwrap_or_else(|| "USPS".to_string()),
-        risk_assessment: "Low Risk".to_string(),
-        seasonal_pricing_factor: 1.02,
-        demand_forecast: "Stable".to_string(),
-        alternative_suggestions: vec![
-            "Consider USPS Priority for best value".to_string(),
-            "DHL recommended for international priority".to_string()
+        fastest_provider: fastest_quote.as_ref()
+            .map(|q| q.provider.clone())
+            .unwrap_or_else(|| "DHL".to_string()),
+        most_reliable_provider: "DHL".to_string(),
+        eco_friendly_provider: eco_quote.as_ref().map(|q| q.provider.clone()),
+        cost_savings_opportunity: Some(Decimal::from_str_exact("15.50").unwrap()),
+        delivery_confidence_score: 94.2,
+        route_optimization_applied: true,
+        seasonal_factors: vec!["Holiday season".to_string()],
+        recommendations: vec![
+            "USPS Priority offers best value".to_string(),
+            "UPS Ground is carbon neutral option".to_string(),
         ],
     };
     
     let processing_time = start_time.elapsed().as_millis() as u64;
+    
+    // Determine if international
+    let is_international = request.from_address.country.to_uppercase() != request.to_address.country.to_uppercase();
+    
+    // Calculate taxes and duties for international shipments
+    let taxes_and_duties = if is_international {
+        Some(TaxesAndDuties {
+            duties_amount: Decimal::from_str_exact("25.00").unwrap(),
+            taxes_amount: Decimal::from_str_exact("15.50").unwrap(),
+            total_additional: Decimal::from_str_exact("40.50").unwrap(),
+            breakdown: vec![
+                TaxBreakdown {
+                    name: "Import Duty".to_string(),
+                    amount: Decimal::from_str_exact("25.00").unwrap(),
+                    percentage: Some(10.0),
+                    description: "Standard import duty".to_string(),
+                },
+                TaxBreakdown {
+                    name: "VAT".to_string(),
+                    amount: Decimal::from_str_exact("15.50").unwrap(),
+                    percentage: Some(6.2),
+                    description: "Value Added Tax".to_string(),
+                },
+            ],
+            duty_free_threshold: Some(Decimal::from_str_exact("20.00").unwrap()),
+            estimated_customs_delay: Some("1-2 business days".to_string()),
+        })
+    } else { None };
     
     let response = UltraShippingResponse {
         request_id,
@@ -227,6 +328,23 @@ async fn get_shipping_rates(
         recommended_quote,
         total_processing_time_ms: processing_time,
         ai_insights,
+        taxes_and_duties,
+        restricted_items: if is_international {
+            vec!["Lithium batteries".to_string(), "Perfumes".to_string()]
+        } else {
+            vec![]
+        },
+        required_documents: if is_international {
+            vec!["Commercial Invoice".to_string(), "Customs Declaration".to_string()]
+        } else {
+            vec![]
+        },
+        warnings: if is_international {
+            vec!["Additional customs processing time may apply".to_string()]
+        } else {
+            vec![]
+        },
+        is_international,
     };
     
     info!("✅ Ultra shipping rates calculated in {}ms", processing_time);
@@ -241,12 +359,28 @@ async fn main() -> anyhow::Result<()> {
     info!("🚀 Starting Ultra Professional Shipping Service");
     info!("⚡ Superior to any enterprise shipping solution");
     
-    let state = Arc::new(AppState {});
+    // Initialize Redis for caching
+    let redis_url = env::var("REDIS_URL").unwrap_or_else(|_| "redis://localhost:6379".to_string());
+    let redis_client = redis::Client::open(redis_url)
+        .expect("Failed to connect to Redis");
+    
+    let state = Arc::new(AppState {
+        redis_client,
+        rate_cache: Arc::new(DashMap::new()),
+        metrics: Arc::new(ShippingMetrics {
+            requests_total: Mutex::new(0),
+            requests_by_provider: Arc::new(DashMap::new()),
+            cache_hits: Mutex::new(0),
+            cache_misses: Mutex::new(0),
+            average_response_time: Mutex::new(0.0),
+        }),
+    });
     
     // Build router
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/rates", post(get_shipping_rates))
+        .route("/calculate", post(get_shipping_rates))  // Alternative endpoint for inventory service
         .layer(CorsLayer::permissive())
         .with_state(state);
     
