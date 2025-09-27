@@ -44,8 +44,13 @@ const SERVICES = [
   },
   {
     name: 'Security Service',
-    url: 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8081/health',
+    url: 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8000/health',
     description: 'FIPS 140-3 Security & Audit Trail'
+  },
+  {
+    name: 'Ultra Professional Frontend',
+    url: window.location.origin + '/api/health',
+    description: 'React TypeScript Frontend with Health Monitoring'
   }
 ];
 

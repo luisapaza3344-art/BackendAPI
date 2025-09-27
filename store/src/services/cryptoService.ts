@@ -945,7 +945,7 @@ export class PaymentServiceFactory {
       throw new Error('Coinbase Commerce API key not configured. Please set REACT_APP_COINBASE_API_KEY environment variable.');
     }
 
-    return new CoinbaseCommerceService(config.coinbaseApiKey, config.timeout);
+    return new CoinbaseCommerceService(config.coinbaseApiKey, config.timeout, import.meta.env.VITE_PAYMENT_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8080');
   }
 
   /**
