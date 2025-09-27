@@ -41,8 +41,13 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
   useEffect(() => {
     const getClientSecret = async () => {
       try {
-        // Call LIVE backend API to create PaymentIntent
-        const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/stripe/create-payment-intent`, {
+        // Call LIVE backend API through Enterprise API Gateway
+        const baseUrl = import.meta.env.VITE_API_GATEWAY_URL;
+        if (!baseUrl) {
+          throw new Error('VITE_API_GATEWAY_URL environment variable is required for payment processing');
+        }
+        const paymentUrl = new URL('/api/stripe/create-payment-intent', baseUrl).toString();
+        const response = await fetch(paymentUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

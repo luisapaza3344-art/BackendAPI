@@ -256,6 +256,9 @@ func (a *Application) setupRoutes(router *gin.Engine) {
                 api.GET("/collections", a.proxyToInventorySystem("/collections"))
                 api.GET("/collections/:id", a.proxyToInventorySystem("/collections/:id"))
                 api.GET("/collections/featured", a.proxyToInventorySystem("/collections/featured"))
+                
+                // Stripe payment endpoints - Proxy to Payment Gateway
+                api.POST("/stripe/create-payment-intent", a.authMiddleware.RequireAuthentication(), a.authMiddleware.RequirePermission("payment:create"), a.paymentHandler.ProcessStripePayment)
         }
         
         // Direct proxy for root endpoints (backwards compatibility)
