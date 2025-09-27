@@ -239,44 +239,6 @@ export class CoinbaseCommerceService {
     }
   }
 
-  /**
-   * Get LIVE charge status
-   * @param chargeId - Coinbase charge ID
-   * @returns Promise with charge details
-   */
-  async getCharge(chargeId: string): Promise<any> {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-
-    try {
-      const response = await fetch(`${this.baseUrl}/charges/${chargeId}`, {
-        headers: {
-          'X-CC-Api-Key': this.apiKey,
-          'X-CC-Version': '2018-03-22',
-          'Accept': 'application/json',
-          'User-Agent': 'MinimalGallery/2.0 (Live-Integration)'
-        },
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        const error = new Error(`Crypto charge retrieval failed: ${response.status}`) as PaymentError;
-        error.status = response.status;
-        error.responseBody = errorBody;
-        error.code = 'CRYPTO_GET_ERROR';
-        error.timestamp = new Date().toISOString();
-        throw error;
-      }
-
-      return await response.json();
-    } catch (error) {
-      clearTimeout(timeoutId);
-      throw error;
-    }
-  }
 
   /**
    * Get supported cryptocurrencies

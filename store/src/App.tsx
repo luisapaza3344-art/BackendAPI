@@ -24,6 +24,7 @@ const CheckoutPage = lazy(() => import('./components/CheckoutPage').then(module 
 const AboutPage = lazy(() => import('./components/AboutPage').then(module => ({ default: module.AboutPage })));
 const UserAccount = lazy(() => import('./components/user/UserAccount').then(module => ({ default: module.UserAccount })));
 const AdminDashboard = lazy(() => import('./components/admin/AdminDashboard').then(module => ({ default: module.AdminDashboard })));
+const HealthCheck = lazy(() => import('./components/HealthCheck').then(module => ({ default: module.default })));
 
 /**
  * Loading component with accessibility features
@@ -267,6 +268,11 @@ const AppContent: React.FC = () => {
             <Route 
               path="/about" 
               element={<AboutPage onNavigate={handleNavigate} />} 
+            />
+            
+            <Route 
+              path="/health" 
+              element={<HealthCheck />} 
             />
 
             {/* Protected Routes */}
