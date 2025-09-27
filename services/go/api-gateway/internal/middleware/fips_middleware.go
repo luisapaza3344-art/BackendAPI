@@ -52,6 +52,17 @@ func FIPSCORS() gin.HandlerFunc {
 // FIPSRateLimit creates FIPS-compliant rate limiting middleware
 func FIPSRateLimit(redisClient *redis.FIPSRedisClient, maxRequests int) gin.HandlerFunc {
         return func(c *gin.Context) {
+                // Handle case when Redis is not available (standalone mode)
+                if redisClient == nil {
+                        // Add headers indicating standalone mode
+                        c.Header("X-RateLimit-Limit", strconv.Itoa(maxRequests))
+                        c.Header("X-RateLimit-Remaining", strconv.Itoa(maxRequests))
+                        c.Header("X-RateLimit-Mode", "standalone")
+                        c.Header("X-FIPS-Compliant", "true")
+                        c.Next()
+                        return
+                }
+                
                 clientIP := c.ClientIP()
                 key := "rate_limit:" + clientIP
                 

@@ -25,10 +25,6 @@ args = "Auth Service"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Enterprise API Gateway"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "Advanced Analytics"
 
 [[workflows.workflow.tasks]]
@@ -42,6 +38,10 @@ args = "Ultra Shipping Service"
 [[workflows.workflow.tasks]]
 task = "workflow.run"
 args = "Ultra Professional Frontend"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Enterprise API Gateway"
 
 [[workflows.workflow]]
 name = "Payment Gateway"
@@ -77,18 +77,6 @@ waitForPort = 8099
 
 [workflows.workflow.metadata]
 outputType = "console"
-
-[[workflows.workflow]]
-name = "Enterprise API Gateway"
-author = "agent"
-
-[workflows.workflow.metadata]
-outputType = "console"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd services/go/api-gateway && PORT=9000 go run cmd/main.go"
-waitForPort = 9000
 
 [[workflows.workflow]]
 name = "Advanced Analytics"
@@ -137,6 +125,18 @@ waitForPort = 5000
 [workflows.workflow.metadata]
 outputType = "webview"
 
+[[workflows.workflow]]
+name = "Enterprise API Gateway"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/go/api-gateway && SERVER_PORT=9000 TLS_ENABLED=false go run cmd/main.go"
+waitForPort = 9000
+
+[workflows.workflow.metadata]
+outputType = "console"
+
 [[ports]]
 localPort = 3000
 externalPort = 3003
@@ -168,10 +168,6 @@ externalPort = 8099
 [[ports]]
 localPort = 9000
 externalPort = 9000
-
-[[ports]]
-localPort = 9091
-externalPort = 3001
 
 [[ports]]
 localPort = 35217
