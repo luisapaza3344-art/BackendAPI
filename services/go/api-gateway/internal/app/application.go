@@ -3,7 +3,10 @@ package app
 import (
         "context"
         "fmt"
+        "io"
         "net/http"
+        "net/url"
+        "strings"
         "time"
 
         "api-gateway/internal/auth"
@@ -232,6 +235,122 @@ func (a *Application) setupRoutes(router *gin.Engine) {
         {
                 public.GET("/status", a.healthHandler.PublicStatus)
                 public.GET("/cose/keys", a.healthHandler.GetPublicKeys)
+        }
+        
+        // Frontend Data API endpoints - Proxy to Ultra Inventory System (port 3000)
+        api := router.Group("/api")
+        api.Use(a.authMiddleware.OptionalAuthentication()) // Allow both authenticated and anonymous access
+        {
+                // Product endpoints
+                api.GET("/products", a.proxyToInventorySystem("/products"))
+                api.GET("/products/:id", a.proxyToInventorySystem("/products/:id"))
+                api.GET("/products/search", a.proxyToInventorySystem("/products/search"))
+                api.GET("/products/featured", a.proxyToInventorySystem("/products/featured"))
+                api.GET("/products/trending", a.proxyToInventorySystem("/products/trending"))
+                
+                // Category endpoints
+                api.GET("/categories", a.proxyToInventorySystem("/categories"))
+                api.GET("/categories/:id", a.proxyToInventorySystem("/categories/:id"))
+                
+                // Collection endpoints  
+                api.GET("/collections", a.proxyToInventorySystem("/collections"))
+                api.GET("/collections/:id", a.proxyToInventorySystem("/collections/:id"))
+                api.GET("/collections/featured", a.proxyToInventorySystem("/collections/featured"))
+        }
+        
+        // Direct proxy for root endpoints (backwards compatibility)
+        router.GET("/products", a.proxyToInventorySystem("/products"))
+        router.GET("/products/*path", a.proxyToInventorySystem("/products/*path")) 
+        router.GET("/categories", a.proxyToInventorySystem("/categories"))
+        router.GET("/categories/*path", a.proxyToInventorySystem("/categories/*path"))
+        router.GET("/collections", a.proxyToInventorySystem("/collections"))
+        router.GET("/collections/*path", a.proxyToInventorySystem("/collections/*path"))
+}
+
+// proxyToInventorySystem creates a proxy handler to forward requests to the Ultra Inventory System
+func (a *Application) proxyToInventorySystem(path string) gin.HandlerFunc {
+        inventoryURL := "http://localhost:3000"
+        
+        return func(c *gin.Context) {
+                // Build target URL
+                targetPath := strings.Replace(path, "*path", c.Param("path"), 1)
+                if strings.Contains(path, ":id") {
+                        targetPath = strings.Replace(targetPath, ":id", c.Param("id"), 1)
+                }
+                
+                // Add query parameters
+                targetURL, err := url.Parse(inventoryURL + targetPath)
+                if err != nil {
+                        a.logger.Error("Failed to parse target URL", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+                        return
+                }
+                
+                // Copy query parameters
+                targetURL.RawQuery = c.Request.URL.RawQuery
+                
+                // Create request to inventory service
+                proxyReq, err := http.NewRequest(c.Request.Method, targetURL.String(), c.Request.Body)
+                if err != nil {
+                        a.logger.Error("Failed to create proxy request", zap.Error(err))
+                        c.JSON(http.StatusInternalServerError, gin.H{"error": "internal server error"})
+                        return
+                }
+                
+                // Copy headers (except Host)
+                for header, values := range c.Request.Header {
+                        if header != "Host" {
+                                for _, value := range values {
+                                        proxyReq.Header.Add(header, value)
+                                }
+                        }
+                }
+                
+                // Add custom headers for traceability
+                proxyReq.Header.Set("X-Forwarded-For", c.ClientIP())
+                proxyReq.Header.Set("X-Forwarded-Host", c.Request.Host)
+                proxyReq.Header.Set("X-Gateway-Source", "fips-api-gateway")
+                
+                // Execute request
+                client := &http.Client{
+                        Timeout: 30 * time.Second,
+                }
+                
+                resp, err := client.Do(proxyReq)
+                if err != nil {
+                        a.logger.Error("Proxy request failed", 
+                                zap.Error(err),
+                                zap.String("target_url", targetURL.String()),
+                                zap.String("client_ip", c.ClientIP()),
+                        )
+                        c.JSON(http.StatusBadGateway, gin.H{"error": "service unavailable"})
+                        return
+                }
+                defer resp.Body.Close()
+                
+                // Copy response headers
+                for header, values := range resp.Header {
+                        for _, value := range values {
+                                c.Header(header, value)
+                        }
+                }
+                
+                // Set status code
+                c.Status(resp.StatusCode)
+                
+                // Copy response body
+                if _, err := io.Copy(c.Writer, resp.Body); err != nil {
+                        a.logger.Error("Failed to copy response body", zap.Error(err))
+                }
+                
+                // Log successful proxy
+                a.logger.Info("Proxy request completed",
+                        zap.String("method", c.Request.Method),
+                        zap.String("path", c.Request.URL.Path),
+                        zap.String("target_url", targetURL.String()),
+                        zap.Int("status", resp.StatusCode),
+                        zap.String("client_ip", c.ClientIP()),
+                )
         }
 }
 

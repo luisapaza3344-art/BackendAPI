@@ -1,5 +1,6 @@
 // API Configuration and Services - Ultra Professional Backend Integration
-const API_BASE_URL = import.meta.env.VITE_INVENTORY_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:3000';
+// Route all API calls through the Enterprise API Gateway (port 9000) via /api prefix
+const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:9000/api';
 
 // API Response Types
 export interface ApiCollection {
