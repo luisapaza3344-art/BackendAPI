@@ -1,6 +1,14 @@
 // API Configuration and Services - Ultra Professional Backend Integration
 // Route all API calls through the Enterprise API Gateway (port 9000) via /api prefix
-const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:9000/api';
+const API_BASE_URL = (() => {
+  const baseUrl = import.meta.env.VITE_API_GATEWAY_URL;
+  if (!baseUrl) {
+    console.error('❌ VITE_API_GATEWAY_URL environment variable is required for API calls');
+    throw new Error('API Gateway URL is required for backend communication');
+  }
+  // Ensure /api suffix for proper routing
+  return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
+})();
 
 // API Response Types
 export interface ApiCollection {
