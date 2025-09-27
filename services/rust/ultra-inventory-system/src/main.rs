@@ -6,7 +6,7 @@ use axum::{
     Router,
 };
 use serde::{Deserialize, Serialize};
-use std::{env, sync::Arc, time::Duration, collections::HashMap};
+use std::{env, sync::Arc, collections::HashMap};
 use dashmap::DashMap;
 use parking_lot::Mutex;
 use tokio::net::TcpListener;
@@ -829,6 +829,7 @@ async fn get_product(
 
 // 🚀 CALCULATE SHIPPING ESTIMATES USING REAL DIMENSIONS
 // 🚀 ULTRA PROFESSIONAL HTTP CLIENT - Calls Ultra Shipping Service
+#[allow(dead_code)]
 async fn check_shipping_availability(
     http_client: &reqwest::Client,
     product: &UltraProduct,
@@ -2352,7 +2353,8 @@ pub struct MultiProductShippingResponse {
 // 🔧 ULTRA SHIPPING AUXILIARY FUNCTIONS - SUPERIORES A AMAZON
 
 // Obtener producto de la base de datos con dimensiones reales
-async fn get_product_from_db(db_pool: &sqlx::PgPool, product_id: Uuid) -> Result<UltraProduct, String> {
+#[allow(dead_code)]
+async fn get_product_from_db(_db_pool: &sqlx::PgPool, product_id: Uuid) -> Result<UltraProduct, String> {
     // Simulación temporal para evitar errores de compilación
     // TODO: Implementar consulta real a la base de datos
     let product = UltraProduct {
@@ -2421,7 +2423,8 @@ async fn get_product_from_db(db_pool: &sqlx::PgPool, product_id: Uuid) -> Result
 }
 
 // Obtener información del warehouse de la base de datos
-async fn get_warehouse_info(db_pool: &sqlx::PgPool, warehouse_id: Uuid) -> Result<WarehouseInfo, String> {
+#[allow(dead_code)]
+async fn get_warehouse_info(_db_pool: &sqlx::PgPool, warehouse_id: Uuid) -> Result<WarehouseInfo, String> {
     // Simulación temporal para evitar errores de compilación
     // TODO: Implementar consulta real a la base de datos
     Ok(WarehouseInfo {
@@ -2438,6 +2441,7 @@ async fn get_warehouse_info(db_pool: &sqlx::PgPool, warehouse_id: Uuid) -> Resul
 }
 
 // Determinar si el envío es internacional
+#[allow(dead_code)]
 fn is_international_shipment(origin_country: &str, destination_country: &str) -> bool {
     origin_country.to_uppercase() != destination_country.to_uppercase()
 }
