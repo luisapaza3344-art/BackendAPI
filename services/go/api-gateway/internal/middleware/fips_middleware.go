@@ -36,7 +36,7 @@ func FIPSCORS() gin.HandlerFunc {
                 // FIPS-compliant CORS headers
                 c.Header("Access-Control-Allow-Origin", origin)
                 c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-                c.Header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
+                c.Header("Access-Control-Allow-Headers", "Accept, Content-Type, Authorization, X-Requested-With, Origin, Referer, User-Agent")
                 c.Header("Access-Control-Allow-Credentials", "true")
                 c.Header("Access-Control-Max-Age", "86400")
                 

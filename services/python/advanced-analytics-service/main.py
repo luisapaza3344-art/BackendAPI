@@ -374,8 +374,9 @@ class EnterpriseAdvancedAnalyticsService:
                     50                                # estimated transaction_count
                 ]])
                 
-                # Scale features
-                features_scaled = self.scaler.transform(features)
+                # Scale features - Convert to DataFrame to maintain feature names
+                feature_df = pd.DataFrame(features, columns=['day_of_year', 'day_of_week', 'hour', 'transaction_count'])
+                features_scaled = self.scaler.transform(feature_df)
                 
                 # Make prediction
                 predicted_revenue = self.revenue_model.predict(features_scaled)[0]
@@ -616,6 +617,11 @@ class EnterpriseAdvancedAnalyticsService:
     async def _cache_analytics_report(self, report: AnalyticsReport):
         """Cache analytics report in Redis"""
         try:
+            # Check if Redis client is available
+            if not self.redis_available or self.redis_client is None:
+                logger.debug("📦 Redis unavailable, skipping cache operation")
+                return
+            
             cache_key = f"analytics_report:{report.report_type}:{report.report_id}"
             cache_data = json.dumps(asdict(report), default=str)
             
