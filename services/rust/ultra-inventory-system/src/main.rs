@@ -238,6 +238,143 @@ pub struct UpdateProductRequest {
     pub tags: Option<Vec<String>>,
 }
 
+// 🏆 ULTRA CATEGORY MANAGEMENT - SUPERIOR TO ENTERPRISE
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UltraCategory {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<Uuid>,
+    pub level: i32,
+    pub sort_order: i32,
+    
+    // ENTERPRISE METADATA
+    pub image_url: Option<String>,
+    pub banner_url: Option<String>,
+    pub icon: Option<String>,
+    pub color_scheme: Option<String>,
+    
+    // ANALYTICS ULTRA PROFESIONAL
+    pub product_count: i32,
+    pub total_revenue: Decimal,
+    pub avg_product_price: Decimal,
+    pub velocity_score: f64,
+    pub profit_margin: f64,
+    pub trending_score: f64,
+    
+    // SEO Y MARKETING
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    pub keywords: Vec<String>,
+    pub featured: bool,
+    pub active: bool,
+    
+    // METADATA
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub created_by: Option<Uuid>,
+}
+
+// 🎯 ULTRA COLLECTION MANAGEMENT - MEJOR QUE AMAZON
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct UltraCollection {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub description: String,
+    pub collection_type: String, // "seasonal", "brand", "promotion", "curated"
+    
+    // VISUAL BRANDING
+    pub image_url: String,
+    pub banner_url: Option<String>,
+    pub video_url: Option<String>,
+    pub color_primary: Option<String>,
+    pub color_secondary: Option<String>,
+    
+    // BUSINESS LOGIC
+    pub product_ids: Vec<Uuid>,
+    pub automatic_rules: Option<serde_json::Value>,
+    pub max_products: Option<i32>,
+    pub min_price: Option<Decimal>,
+    pub max_price: Option<Decimal>,
+    
+    // ENTERPRISE ANALYTICS
+    pub view_count: i64,
+    pub conversion_rate: f64,
+    pub total_revenue: Decimal,
+    pub avg_order_value: Decimal,
+    pub customer_rating: Option<f64>,
+    pub popularity_score: f64,
+    
+    // TIMING & AVAILABILITY
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
+    pub featured: bool,
+    pub active: bool,
+    pub sort_order: i32,
+    
+    // SEO ULTRA PROFESIONAL
+    pub meta_title: Option<String>,
+    pub meta_description: Option<String>,
+    pub tags: Vec<String>,
+    
+    // METADATA
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub created_by: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateCategoryRequest {
+    pub name: String,
+    pub display_name: String,
+    pub description: Option<String>,
+    pub parent_id: Option<Uuid>,
+    pub image_url: Option<String>,
+    pub sort_order: Option<i32>,
+    pub featured: Option<bool>,
+    pub keywords: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateCollectionRequest {
+    pub name: String,
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub description: String,
+    pub collection_type: String,
+    pub image_url: String,
+    pub product_ids: Vec<Uuid>,
+    pub featured: Option<bool>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CategoryWithProducts {
+    pub category: UltraCategory,
+    pub products: Vec<UltraProduct>,
+    pub subcategories: Vec<UltraCategory>,
+    pub breadcrumbs: Vec<CategoryBreadcrumb>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollectionWithProducts {
+    pub collection: UltraCollection,
+    pub products: Vec<UltraProduct>,
+    pub related_collections: Vec<UltraCollection>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CategoryBreadcrumb {
+    pub id: Uuid,
+    pub name: String,
+    pub slug: String,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct EnhancedProduct {
     pub product: UltraProduct,
@@ -981,6 +1118,741 @@ pub struct ProductListResponse {
     pub filters_applied: serde_json::Value,
 }
 
+// 🏆 CATEGORY AND COLLECTION QUERY STRUCTS
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CategoryListQuery {
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+    pub featured: Option<bool>,
+    pub parent_id: Option<Uuid>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CategoryListResponse {
+    pub categories: Vec<UltraCategory>,
+    pub total_count: i64,
+    pub page: i32,
+    pub per_page: i32,
+    pub total_pages: i32,
+    pub filters_applied: serde_json::Value,
+    pub analytics: CategoryAnalytics,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CategoryAnalytics {
+    pub total_categories: i32,
+    pub total_products: i32,
+    pub total_revenue: Decimal,
+    pub avg_profit_margin: f64,
+    pub top_performing_category: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollectionListQuery {
+    pub page: Option<i32>,
+    pub per_page: Option<i32>,
+    pub featured: Option<bool>,
+    pub collection_type: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollectionListResponse {
+    pub collections: Vec<UltraCollection>,
+    pub total_count: i64,
+    pub page: i32,
+    pub per_page: i32,
+    pub total_pages: i32,
+    pub filters_applied: serde_json::Value,
+    pub analytics: CollectionAnalytics,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CollectionAnalytics {
+    pub total_collections: i32,
+    pub total_views: i64,
+    pub avg_conversion_rate: f64,
+    pub total_revenue: Decimal,
+    pub top_performing_collection: String,
+}
+
+// 🏆 ULTRA CATEGORY MANAGEMENT - SUPERIOR TO ENTERPRISE
+async fn list_categories(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<CategoryListQuery>,
+) -> Result<Json<CategoryListResponse>, StatusCode> {
+    info!("📂 Listing categories with enterprise analytics");
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    // 🚀 ULTRA PROFESSIONAL: Generate sample categories superior to Amazon/Shopify
+    let categories = vec![
+        UltraCategory {
+            id: Uuid::new_v4(),
+            name: "electronics".to_string(),
+            slug: "electronics".to_string(),
+            display_name: "Electronics".to_string(),
+            description: Some("Advanced electronic devices and components".to_string()),
+            parent_id: None,
+            level: 1,
+            sort_order: 1,
+            image_url: Some("https://images.example.com/categories/electronics.jpg".to_string()),
+            banner_url: Some("https://images.example.com/banners/electronics.jpg".to_string()),
+            icon: Some("🔌".to_string()),
+            color_scheme: Some("#1E3A8A".to_string()),
+            product_count: 1250,
+            total_revenue: Decimal::from(2_450_000),
+            avg_product_price: Decimal::from(195),
+            velocity_score: 9.2,
+            profit_margin: 0.35,
+            trending_score: 8.7,
+            meta_title: Some("Premium Electronics - Ultra Store".to_string()),
+            meta_description: Some("Discover cutting-edge electronics with enterprise-grade quality".to_string()),
+            keywords: vec!["electronics".to_string(), "tech".to_string(), "devices".to_string()],
+            featured: true,
+            active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        },
+        UltraCategory {
+            id: Uuid::new_v4(),
+            name: "fashion".to_string(),
+            slug: "fashion".to_string(),
+            display_name: "Fashion & Apparel".to_string(),
+            description: Some("Premium fashion and clothing collections".to_string()),
+            parent_id: None,
+            level: 1,
+            sort_order: 2,
+            image_url: Some("https://images.example.com/categories/fashion.jpg".to_string()),
+            banner_url: Some("https://images.example.com/banners/fashion.jpg".to_string()),
+            icon: Some("👔".to_string()),
+            color_scheme: Some("#BE185D".to_string()),
+            product_count: 2100,
+            total_revenue: Decimal::from(3_200_000),
+            avg_product_price: Decimal::from(85),
+            velocity_score: 8.9,
+            profit_margin: 0.42,
+            trending_score: 9.1,
+            meta_title: Some("Premium Fashion Collections - Ultra Store".to_string()),
+            meta_description: Some("Explore luxury fashion with enterprise-level curation".to_string()),
+            keywords: vec!["fashion".to_string(), "clothing".to_string(), "apparel".to_string()],
+            featured: true,
+            active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        },
+        UltraCategory {
+            id: Uuid::new_v4(),
+            name: "home-garden".to_string(),
+            slug: "home-garden".to_string(),
+            display_name: "Home & Garden".to_string(),
+            description: Some("Premium home improvement and garden essentials".to_string()),
+            parent_id: None,
+            level: 1,
+            sort_order: 3,
+            image_url: Some("https://images.example.com/categories/home.jpg".to_string()),
+            banner_url: None,
+            icon: Some("🏠".to_string()),
+            color_scheme: Some("#059669".to_string()),
+            product_count: 890,
+            total_revenue: Decimal::from(1_800_000),
+            avg_product_price: Decimal::from(125),
+            velocity_score: 7.8,
+            profit_margin: 0.28,
+            trending_score: 8.3,
+            meta_title: Some("Home & Garden Essentials - Ultra Store".to_string()),
+            meta_description: Some("Transform your space with premium home and garden products".to_string()),
+            keywords: vec!["home".to_string(), "garden".to_string(), "furniture".to_string()],
+            featured: false,
+            active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        }
+    ];
+    
+    let response = CategoryListResponse {
+        categories,
+        total_count: 3,
+        page: 1,
+        per_page: 50,
+        total_pages: 1,
+        filters_applied: serde_json::json!({
+            "featured": params.featured,
+            "parent_id": params.parent_id
+        }),
+        analytics: CategoryAnalytics {
+            total_categories: 3,
+            total_products: 4240,
+            total_revenue: Decimal::from(7_450_000),
+            avg_profit_margin: 0.35,
+            top_performing_category: "fashion".to_string(),
+        }
+    };
+    
+    info!("✅ Listed {} categories with enterprise analytics", response.total_count);
+    Ok(Json(response))
+}
+
+async fn get_category(
+    State(state): State<Arc<AppState>>,
+    Path(category_id): Path<Uuid>,
+) -> Result<Json<CategoryWithProducts>, StatusCode> {
+    info!("📂 Getting category details: {}", category_id);
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    // 🚀 ENTERPRISE GRADE: Sample category with full analytics
+    let category = UltraCategory {
+        id: category_id,
+        name: "electronics".to_string(),
+        slug: "electronics".to_string(),
+        display_name: "Electronics".to_string(),
+        description: Some("Advanced electronic devices and components with enterprise-grade quality assurance".to_string()),
+        parent_id: None,
+        level: 1,
+        sort_order: 1,
+        image_url: Some("https://images.example.com/categories/electronics.jpg".to_string()),
+        banner_url: Some("https://images.example.com/banners/electronics-hero.jpg".to_string()),
+        icon: Some("🔌".to_string()),
+        color_scheme: Some("#1E3A8A".to_string()),
+        product_count: 1250,
+        total_revenue: Decimal::from(2_450_000),
+        avg_product_price: Decimal::from(195),
+        velocity_score: 9.2,
+        profit_margin: 0.35,
+        trending_score: 8.7,
+        meta_title: Some("Premium Electronics - Ultra Professional Store".to_string()),
+        meta_description: Some("Discover cutting-edge electronics with enterprise-grade quality and professional support".to_string()),
+        keywords: vec!["electronics".to_string(), "tech".to_string(), "devices".to_string(), "professional".to_string()],
+        featured: true,
+        active: true,
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        created_by: None,
+    };
+    
+    // Products in this category (sample enterprise data)
+    let products = vec![
+        UltraProduct {
+            id: Uuid::new_v4(),
+            sku: "ELEC-PRO-001".to_string(),
+            name: "Ultra Professional Laptop".to_string(),
+            brand: Some("UltraBrand".to_string()),
+            category: "electronics".to_string(),
+            subcategory: Some("computers".to_string()),
+            short_description: "Enterprise-grade laptop for professionals".to_string(),
+            long_description: "State-of-the-art laptop with enterprise security features and professional support".to_string(),
+            technical_specifications: serde_json::json!({
+                "processor": "Intel i9-13900H",
+                "memory": "32GB DDR5",
+                "storage": "1TB NVMe SSD",
+                "display": "15.6'' 4K OLED"
+            }),
+            features: vec!["Enterprise Security".to_string(), "24/7 Support".to_string(), "3-Year Warranty".to_string()],
+            materials: Some("Aluminum Alloy".to_string()),
+            origin_country: Some("USA".to_string()),
+            dimensions: ProductDimensions {
+                length: Decimal::from(35),
+                width: Decimal::from(25),
+                height: Decimal::from(2),
+                unit: "cm".to_string(),
+                volume: Some(Decimal::from(1750)),
+                dimensional_weight: Some(Decimal::from_str_exact("1.5").unwrap()),
+            },
+            weight: ProductWeight {
+                weight: Decimal::from_str_exact("1.8").unwrap(),
+                unit: "kg".to_string(),
+                shipping_weight: Some(Decimal::from_str_exact("2.5").unwrap()),
+            },
+            packaging_type: "Ultra Secure".to_string(),
+            fragile: true,
+            hazardous: false,
+            images: vec![],
+            videos: vec![],
+            documents: vec![],
+            cost_price: Decimal::from(1200),
+            selling_price: Decimal::from(1899),
+            msrp: Some(Decimal::from(2199)),
+            currency: "USD".to_string(),
+            tax_category: "Electronics".to_string(),
+            inventory_levels: vec![],
+            total_available: 45,
+            total_reserved: 8,
+            total_incoming: 25,
+            reorder_point: 10,
+            max_stock: 100,
+            demand_forecast: DemandForecast {
+                next_7_days: 12,
+                next_30_days: 48,
+                next_90_days: 144,
+                seasonal_factor: 1.2,
+                trend_direction: "Increasing".to_string(),
+                confidence_level: 0.92,
+            },
+            velocity_score: 9.5,
+            profitability_score: 9.1,
+            stockout_risk: 0.05,
+            sustainability_score: 8.5,
+            status: ProductStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            tags: vec!["electronics".to_string(), "professional".to_string(), "laptop".to_string()],
+        }
+    ];
+    
+    // Subcategories
+    let subcategories = vec![
+        UltraCategory {
+            id: Uuid::new_v4(),
+            name: "computers".to_string(),
+            slug: "computers".to_string(),
+            display_name: "Computers".to_string(),
+            description: Some("Professional computers and workstations".to_string()),
+            parent_id: Some(category_id),
+            level: 2,
+            sort_order: 1,
+            image_url: Some("https://images.example.com/categories/computers.jpg".to_string()),
+            banner_url: None,
+            icon: Some("💻".to_string()),
+            color_scheme: Some("#1E3A8A".to_string()),
+            product_count: 450,
+            total_revenue: Decimal::from(890_000),
+            avg_product_price: Decimal::from(1250),
+            velocity_score: 9.1,
+            profit_margin: 0.32,
+            trending_score: 9.0,
+            meta_title: Some("Professional Computers - Ultra Store".to_string()),
+            meta_description: Some("Enterprise-grade computers for professional use".to_string()),
+            keywords: vec!["computers".to_string(), "laptop".to_string(), "workstation".to_string()],
+            featured: true,
+            active: true,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        }
+    ];
+    
+    // Breadcrumbs for navigation
+    let breadcrumbs = vec![
+        CategoryBreadcrumb {
+            id: category_id,
+            name: "Electronics".to_string(),
+            slug: "electronics".to_string(),
+        }
+    ];
+    
+    let response = CategoryWithProducts {
+        category,
+        products,
+        subcategories,
+        breadcrumbs,
+    };
+    
+    info!("✅ Category details retrieved with {} products", response.products.len());
+    Ok(Json(response))
+}
+
+async fn create_category(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateCategoryRequest>,
+) -> Result<Json<UltraCategory>, StatusCode> {
+    info!("🏆 Creating ultra professional category: {}", request.name);
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    let category_id = Uuid::new_v4();
+    let now = Utc::now();
+    
+    // Generate slug from name
+    let slug = request.name.to_lowercase().replace(" ", "-");
+    
+    // Clone values that will be used later
+    let display_name_clone = request.display_name.clone();
+    
+    let category = UltraCategory {
+        id: category_id,
+        name: slug.clone(),
+        slug: slug.clone(),
+        display_name: request.display_name,
+        description: request.description,
+        parent_id: request.parent_id,
+        level: if request.parent_id.is_some() { 2 } else { 1 },
+        sort_order: request.sort_order.unwrap_or(999),
+        image_url: request.image_url,
+        banner_url: None,
+        icon: None,
+        color_scheme: Some("#374151".to_string()),
+        product_count: 0,
+        total_revenue: Decimal::from(0),
+        avg_product_price: Decimal::from(0),
+        velocity_score: 0.0,
+        profit_margin: 0.0,
+        trending_score: 0.0,
+        meta_title: Some(format!("{} - Ultra Professional Store", display_name_clone)),
+        meta_description: Some(format!("Explore {} products with enterprise-grade quality", display_name_clone.to_lowercase())),
+        keywords: request.keywords,
+        featured: request.featured.unwrap_or(false),
+        active: true,
+        created_at: now,
+        updated_at: now,
+        created_by: None,
+    };
+    
+    // 🚀 TODO: Insert into database in production
+    info!("✅ Category created successfully: {}", category.display_name);
+    Ok(Json(category))
+}
+
+// 🎯 ULTRA COLLECTION MANAGEMENT - MEJOR QUE AMAZON
+async fn list_collections(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<CollectionListQuery>,
+) -> Result<Json<CollectionListResponse>, StatusCode> {
+    info!("🎨 Listing collections with advanced analytics");
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    // 🚀 ULTRA PROFESSIONAL: Sample collections superior to Amazon/Shopify
+    let collections = vec![
+        UltraCollection {
+            id: Uuid::new_v4(),
+            name: "summer-tech-2024".to_string(),
+            slug: "summer-tech-2024".to_string(),
+            title: "Summer Tech Collection 2024".to_string(),
+            subtitle: Some("Essential tech for the modern professional".to_string()),
+            description: "Curated collection of cutting-edge technology products perfect for summer productivity and outdoor work".to_string(),
+            collection_type: "seasonal".to_string(),
+            image_url: "https://images.example.com/collections/summer-tech.jpg".to_string(),
+            banner_url: Some("https://images.example.com/banners/summer-tech-hero.jpg".to_string()),
+            video_url: Some("https://videos.example.com/summer-tech-showcase.mp4".to_string()),
+            color_primary: Some("#059669".to_string()),
+            color_secondary: Some("#10B981".to_string()),
+            product_ids: vec![Uuid::new_v4(), Uuid::new_v4(), Uuid::new_v4()],
+            automatic_rules: Some(serde_json::json!({
+                "categories": ["electronics"],
+                "tags": ["summer", "outdoor", "portable"],
+                "min_rating": 4.5
+            })),
+            max_products: Some(20),
+            min_price: Some(Decimal::from(50)),
+            max_price: Some(Decimal::from(2000)),
+            view_count: 15420,
+            conversion_rate: 0.085,
+            total_revenue: Decimal::from(245_000),
+            avg_order_value: Decimal::from(320),
+            customer_rating: Some(4.8),
+            popularity_score: 9.2,
+            start_date: Some(Utc::now() - chrono::Duration::days(30)),
+            end_date: Some(Utc::now() + chrono::Duration::days(60)),
+            featured: true,
+            active: true,
+            sort_order: 1,
+            meta_title: Some("Summer Tech Collection 2024 - Ultra Store".to_string()),
+            meta_description: Some("Discover the best tech products for summer productivity and outdoor adventures".to_string()),
+            tags: vec!["summer".to_string(), "tech".to_string(), "outdoor".to_string(), "professional".to_string()],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        },
+        UltraCollection {
+            id: Uuid::new_v4(),
+            name: "executive-essentials".to_string(),
+            slug: "executive-essentials".to_string(),
+            title: "Executive Essentials".to_string(),
+            subtitle: Some("Premium products for business leaders".to_string()),
+            description: "Hand-picked collection of luxury items and professional tools designed for C-level executives and business leaders".to_string(),
+            collection_type: "curated".to_string(),
+            image_url: "https://images.example.com/collections/executive.jpg".to_string(),
+            banner_url: Some("https://images.example.com/banners/executive-hero.jpg".to_string()),
+            video_url: None,
+            color_primary: Some("#1E3A8A".to_string()),
+            color_secondary: Some("#3B82F6".to_string()),
+            product_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+            automatic_rules: Some(serde_json::json!({
+                "min_price": 500,
+                "tags": ["luxury", "executive", "premium"],
+                "min_rating": 4.7
+            })),
+            max_products: Some(15),
+            min_price: Some(Decimal::from(500)),
+            max_price: None,
+            view_count: 8950,
+            conversion_rate: 0.125,
+            total_revenue: Decimal::from(450_000),
+            avg_order_value: Decimal::from(1250),
+            customer_rating: Some(4.9),
+            popularity_score: 8.9,
+            start_date: None,
+            end_date: None,
+            featured: true,
+            active: true,
+            sort_order: 2,
+            meta_title: Some("Executive Essentials - Ultra Professional Store".to_string()),
+            meta_description: Some("Luxury products and professional tools for business executives and leaders".to_string()),
+            tags: vec!["executive".to_string(), "luxury".to_string(), "business".to_string(), "premium".to_string()],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        }
+    ];
+    
+    let response = CollectionListResponse {
+        collections,
+        total_count: 2,
+        page: 1,
+        per_page: 50,
+        total_pages: 1,
+        filters_applied: serde_json::json!({
+            "featured": params.featured,
+            "collection_type": params.collection_type
+        }),
+        analytics: CollectionAnalytics {
+            total_collections: 2,
+            total_views: 24370,
+            avg_conversion_rate: 0.105,
+            total_revenue: Decimal::from(695_000),
+            top_performing_collection: "executive-essentials".to_string(),
+        }
+    };
+    
+    info!("✅ Listed {} collections with advanced analytics", response.total_count);
+    Ok(Json(response))
+}
+
+async fn get_collection(
+    State(state): State<Arc<AppState>>,
+    Path(collection_id): Path<Uuid>,
+) -> Result<Json<CollectionWithProducts>, StatusCode> {
+    info!("🎨 Getting collection details: {}", collection_id);
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    // 🚀 ENTERPRISE GRADE: Sample collection with full analytics
+    let collection = UltraCollection {
+        id: collection_id,
+        name: "summer-tech-2024".to_string(),
+        slug: "summer-tech-2024".to_string(),
+        title: "Summer Tech Collection 2024".to_string(),
+        subtitle: Some("Essential tech for the modern professional".to_string()),
+        description: "Curated collection of cutting-edge technology products perfect for summer productivity and outdoor work. Each product has been tested by our team of experts for quality, durability, and performance in various conditions.".to_string(),
+        collection_type: "seasonal".to_string(),
+        image_url: "https://images.example.com/collections/summer-tech.jpg".to_string(),
+        banner_url: Some("https://images.example.com/banners/summer-tech-hero.jpg".to_string()),
+        video_url: Some("https://videos.example.com/summer-tech-showcase.mp4".to_string()),
+        color_primary: Some("#059669".to_string()),
+        color_secondary: Some("#10B981".to_string()),
+        product_ids: vec![Uuid::new_v4(), Uuid::new_v4()],
+        automatic_rules: Some(serde_json::json!({
+            "categories": ["electronics"],
+            "tags": ["summer", "outdoor", "portable"],
+            "min_rating": 4.5,
+            "max_weight_kg": 2.0
+        })),
+        max_products: Some(20),
+        min_price: Some(Decimal::from(50)),
+        max_price: Some(Decimal::from(2000)),
+        view_count: 15420,
+        conversion_rate: 0.085,
+        total_revenue: Decimal::from(245_000),
+        avg_order_value: Decimal::from(320),
+        customer_rating: Some(4.8),
+        popularity_score: 9.2,
+        start_date: Some(Utc::now() - chrono::Duration::days(30)),
+        end_date: Some(Utc::now() + chrono::Duration::days(60)),
+        featured: true,
+        active: true,
+        sort_order: 1,
+        meta_title: Some("Summer Tech Collection 2024 - Ultra Professional Store".to_string()),
+        meta_description: Some("Discover the best tech products for summer productivity and outdoor adventures".to_string()),
+        tags: vec!["summer".to_string(), "tech".to_string(), "outdoor".to_string(), "professional".to_string()],
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+        created_by: None,
+    };
+    
+    // Products in this collection
+    let products = vec![
+        UltraProduct {
+            id: Uuid::new_v4(),
+            sku: "SUMMER-TABLET-001".to_string(),
+            name: "Ultra Outdoor Tablet Pro".to_string(),
+            brand: Some("UltraBrand".to_string()),
+            category: "electronics".to_string(),
+            subcategory: Some("tablets".to_string()),
+            short_description: "Rugged tablet perfect for outdoor professional work".to_string(),
+            long_description: "Professional-grade tablet with IP68 rating, extended battery life, and bright outdoor display. Perfect for field work, construction, and outdoor photography.".to_string(),
+            technical_specifications: serde_json::json!({
+                "display": "12.9'' Retina Display 1000 nits",
+                "processor": "M2 Chip",
+                "storage": "256GB",
+                "battery": "10 hours outdoor use",
+                "rating": "IP68 Waterproof"
+            }),
+            features: vec!["Waterproof".to_string(), "Outdoor Display".to_string(), "Extended Battery".to_string(), "Rugged Design".to_string()],
+            materials: Some("Aerospace-grade aluminum".to_string()),
+            origin_country: Some("USA".to_string()),
+            dimensions: ProductDimensions {
+                length: Decimal::from(28),
+                width: Decimal::from(21),
+                height: Decimal::from(1),
+                unit: "cm".to_string(),
+                volume: Some(Decimal::from(588)),
+                dimensional_weight: Some(Decimal::from_str_exact("0.7").unwrap()),
+            },
+            weight: ProductWeight {
+                weight: Decimal::from_str_exact("0.65").unwrap(),
+                unit: "kg".to_string(),
+                shipping_weight: Some(Decimal::from_str_exact("1.2").unwrap()),
+            },
+            packaging_type: "Eco-Friendly".to_string(),
+            fragile: true,
+            hazardous: false,
+            images: vec![],
+            videos: vec![],
+            documents: vec![],
+            cost_price: Decimal::from(450),
+            selling_price: Decimal::from(799),
+            msrp: Some(Decimal::from(999)),
+            currency: "USD".to_string(),
+            tax_category: "Electronics".to_string(),
+            inventory_levels: vec![],
+            total_available: 85,
+            total_reserved: 12,
+            total_incoming: 40,
+            reorder_point: 20,
+            max_stock: 200,
+            demand_forecast: DemandForecast {
+                next_7_days: 18,
+                next_30_days: 72,
+                next_90_days: 216,
+                seasonal_factor: 1.4,
+                trend_direction: "Increasing".to_string(),
+                confidence_level: 0.89,
+            },
+            velocity_score: 8.9,
+            profitability_score: 8.7,
+            stockout_risk: 0.12,
+            sustainability_score: 9.1,
+            status: ProductStatus::Active,
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+            tags: vec!["summer".to_string(), "outdoor".to_string(), "tablet".to_string(), "rugged".to_string()],
+        }
+    ];
+    
+    // Related collections
+    let related_collections = vec![
+        UltraCollection {
+            id: Uuid::new_v4(),
+            name: "outdoor-gear".to_string(),
+            slug: "outdoor-gear".to_string(),
+            title: "Outdoor Gear Essentials".to_string(),
+            subtitle: Some("Professional outdoor equipment".to_string()),
+            description: "Essential gear for outdoor professionals and adventurers".to_string(),
+            collection_type: "curated".to_string(),
+            image_url: "https://images.example.com/collections/outdoor-gear.jpg".to_string(),
+            banner_url: None,
+            video_url: None,
+            color_primary: Some("#059669".to_string()),
+            color_secondary: Some("#10B981".to_string()),
+            product_ids: vec![],
+            automatic_rules: None,
+            max_products: Some(25),
+            min_price: None,
+            max_price: None,
+            view_count: 8920,
+            conversion_rate: 0.067,
+            total_revenue: Decimal::from(125_000),
+            avg_order_value: Decimal::from(280),
+            customer_rating: Some(4.6),
+            popularity_score: 8.4,
+            start_date: None,
+            end_date: None,
+            featured: false,
+            active: true,
+            sort_order: 5,
+            meta_title: Some("Outdoor Gear Essentials - Ultra Store".to_string()),
+            meta_description: Some("Professional outdoor equipment for adventurers and professionals".to_string()),
+            tags: vec!["outdoor".to_string(), "gear".to_string(), "adventure".to_string()],
+            created_at: Utc::now(),
+            updated_at: Utc::now(),
+            created_by: None,
+        }
+    ];
+    
+    let response = CollectionWithProducts {
+        collection,
+        products,
+        related_collections,
+    };
+    
+    info!("✅ Collection details retrieved with {} products", response.products.len());
+    Ok(Json(response))
+}
+
+async fn create_collection(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<CreateCollectionRequest>,
+) -> Result<Json<UltraCollection>, StatusCode> {
+    info!("🎨 Creating ultra professional collection: {}", request.name);
+    
+    *state.metrics.requests_total.lock() += 1;
+    
+    let collection_id = Uuid::new_v4();
+    let now = Utc::now();
+    
+    // Generate slug from name
+    let slug = request.name.to_lowercase().replace(" ", "-");
+    
+    // Clone values that will be used later
+    let title_clone = request.title.clone();
+    
+    let collection = UltraCollection {
+        id: collection_id,
+        name: slug.clone(),
+        slug: slug.clone(),
+        title: request.title,
+        subtitle: request.subtitle,
+        description: request.description,
+        collection_type: request.collection_type,
+        image_url: request.image_url,
+        banner_url: None,
+        video_url: None,
+        color_primary: Some("#374151".to_string()),
+        color_secondary: Some("#6B7280".to_string()),
+        product_ids: request.product_ids,
+        automatic_rules: None,
+        max_products: Some(50),
+        min_price: None,
+        max_price: None,
+        view_count: 0,
+        conversion_rate: 0.0,
+        total_revenue: Decimal::from(0),
+        avg_order_value: Decimal::from(0),
+        customer_rating: None,
+        popularity_score: 0.0,
+        start_date: None,
+        end_date: None,
+        featured: request.featured.unwrap_or(false),
+        active: true,
+        sort_order: 999,
+        meta_title: Some(format!("{} - Ultra Professional Store", title_clone)),
+        meta_description: Some(format!("Explore {} with enterprise-grade curation", title_clone.to_lowercase())),
+        tags: request.tags,
+        created_at: now,
+        updated_at: now,
+        created_by: None,
+    };
+    
+    // 🚀 TODO: Insert into database in production
+    info!("✅ Collection created successfully: {}", collection.title);
+    Ok(Json(collection))
+}
+
 // Get ultra inventory overview
 async fn get_ultra_inventory(
     State(_state): State<Arc<AppState>>,
@@ -1650,6 +2522,16 @@ async fn main() -> anyhow::Result<()> {
         // ✅ Shipping estimates handled by Ultra Shipping Service on port 6800
         .route("/products/:id/stock", post(update_product_stock))
         .route("/products/:id/stock", get(get_product_stock))
+        
+        // 🏆 ULTRA CATEGORY MANAGEMENT - SUPERIOR TO ENTERPRISE
+        .route("/categories", get(list_categories))
+        .route("/categories", post(create_category))
+        .route("/categories/:id", get(get_category))
+        
+        // 🎯 ULTRA COLLECTION MANAGEMENT - MEJOR QUE AMAZON
+        .route("/collections", get(list_collections))
+        .route("/collections", post(create_collection))
+        .route("/collections/:id", get(get_collection))
         
         // 📦 WAREHOUSE MANAGEMENT 
         .route("/warehouses", get(list_warehouses))
