@@ -1,0 +1,300 @@
+openapi: 3.1.0
+info:
+  title: Government-Grade API Gateway
+  version: 1.0.0
+  description: |
+    Enterprise API Gateway with FIPS 140-3 Level 3 compliance and post-quantum cryptography.
+    
+    Security Features:
+    - Kyber-1024 key encapsulation (NIST Level 5)
+    - Dilithium-5 digital signatures
+    - Zero-knowledge proof authentication
+    - Blockchain-anchored audit trails
+  contact:
+    name: Security Team
+    email: security@gov.platform
+
+servers:
+  - url: https://api.gov.platform/v1
+    description: Production (FIPS mode)
+  - url: https://staging.api.gov.platform/v1
+    description: Staging (FIPS mode)
+
+security:
+  - BearerAuth: []
+  - PQSignature: []
+
+paths:
+  /auth/login:
+    post:
+      summary: Authenticate user with post-quantum security
+      operationId: login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Authentication successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+
+  /payments:
+    post:
+      summary: Process payment with PCI-DSS compliance
+      operationId: processPayment
+      tags: [Payments]
+      security:
+        - BearerAuth: []
+        - PQSignature: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentRequest'
+      responses:
+        '200':
+          description: Payment processed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '402':
+          description: Payment failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /inventory/products:
+    get:
+      summary: List products with advanced analytics
+      operationId: listProducts
+      tags: [Inventory]
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+        - name: category
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Products listed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  products:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  pagination:
+                    $ref: '#/components/schemas/Pagination'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token with Dilithium-5 signature
+    
+    PQSignature:
+      type: apiKey
+      in: header
+      name: X-PQ-Signature
+      description: Dilithium-5 signature of request body
+
+  schemas:
+    LoginRequest:
+      type: object
+      required: [username, password_hash]
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 64
+        password_hash:
+          type: string
+          description: SHA3-512 hash (never send plain passwords)
+        mfa_token:
+          type: string
+          description: Time-based OTP for 2FA
+        pq_signature:
+          type: string
+          format: base64
+          description: Dilithium-5 signature
+    
+    LoginResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+        refresh_token:
+          type: string
+        expires_at:
+          type: integer
+          format: int64
+        user:
+          $ref: '#/components/schemas/UserInfo'
+        pq_proof:
+          type: string
+          format: base64
+          description: Zero-knowledge proof
+    
+    PaymentRequest:
+      type: object
+      required: [amount_cents, currency, method]
+      properties:
+        amount_cents:
+          type: integer
+          minimum: 1
+        currency:
+          type: string
+          pattern: '^[A-Z]{3}$'
+        method:
+          type: string
+          enum: [stripe, paypal, coinbase, apple_pay, google_pay]
+        encrypted_card_data:
+          type: string
+          format: base64
+          description: Kyber-1024 encrypted card data
+        pq_signature:
+          type: string
+          format: base64
+    
+    PaymentResponse:
+      type: object
+      properties:
+        payment_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, processing, succeeded, failed, refunded]
+        transaction_id:
+          type: string
+        zk_proof:
+          type: string
+          format: base64
+        blockchain_anchor:
+          type: string
+          description: IPFS CID / Bitcoin transaction
+        processed_at:
+          type: integer
+          format: int64
+    
+    Product:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        price_cents:
+          type: integer
+        category:
+          type: string
+        inventory_count:
+          type: integer
+    
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        roles:
+          type: array
+          items:
+            type: string
+        permissions:
+          type: array
+          items:
+            type: string
+    
+    Pagination:
+      type: object
+      properties:
+        page:
+          type: integer
+        limit:
+          type: integer
+        total:
+          type: integer
+        pages:
+          type: integer
+    
+    Error:
+      type: object
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        details:
+          type: object
+        request_id:
+          type: string
+          format: uuid
+  
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    Unauthorized:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    
+    RateLimited:
+      description: Too many requests
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'

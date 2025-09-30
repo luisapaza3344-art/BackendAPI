@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package gov.platform.payment.v1;
+
+option go_package = "platform/contracts/gen/go/payment/v1;paymentv1";
+
+// PaymentService provides PCI-DSS Level 1 compliant payment processing
+service PaymentService {
+  // Process payment with quantum-resistant encryption
+  rpc ProcessPayment(PaymentRequest) returns (PaymentResponse);
+  
+  // Get payment status with zero-knowledge proof
+  rpc GetPaymentStatus(PaymentStatusRequest) returns (PaymentStatusResponse);
+  
+  // List payment history with cryptographic audit trail
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+  
+  // Verify payment integrity with blockchain anchor
+  rpc VerifyPaymentIntegrity(VerifyIntegrityRequest) returns (VerifyIntegrityResponse);
+}
+
+message PaymentRequest {
+  string payment_id = 1;
+  string user_id = 2;
+  int64 amount_cents = 3;
+  string currency = 4;
+  PaymentMethod method = 5;
+  bytes encrypted_card_data = 6;  // Kyber-1024 encrypted
+  bytes pq_signature = 7;          // Dilithium-5 signature
+  map<string, string> metadata = 8;
+}
+
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_STRIPE = 1;
+  PAYMENT_METHOD_PAYPAL = 2;
+  PAYMENT_METHOD_COINBASE = 3;
+  PAYMENT_METHOD_APPLE_PAY = 4;
+  PAYMENT_METHOD_GOOGLE_PAY = 5;
+}
+
+message PaymentResponse {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  string transaction_id = 3;
+  bytes zk_proof = 4;              // Zero-knowledge proof
+  string blockchain_anchor = 5;    // IPFS/Bitcoin anchor
+  int64 processed_at = 6;
+}
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_PROCESSING = 2;
+  PAYMENT_STATUS_SUCCEEDED = 3;
+  PAYMENT_STATUS_FAILED = 4;
+  PAYMENT_STATUS_REFUNDED = 5;
+}
+
+message PaymentStatusRequest {
+  string payment_id = 1;
+}
+
+message PaymentStatusResponse {
+  string payment_id = 1;
+  PaymentStatus status = 2;
+  int64 amount_cents = 3;
+  string currency = 4;
+  int64 created_at = 5;
+  int64 updated_at = 6;
+  bytes integrity_proof = 7;
+}
+
+message ListPaymentsRequest {
+  string user_id = 1;
+  int32 page_size = 2;
+  string page_token = 3;
+  PaymentStatus status_filter = 4;
+}
+
+message ListPaymentsResponse {
+  repeated PaymentInfo payments = 1;
+  string next_page_token = 2;
+  int32 total_count = 3;
+}
+
+message PaymentInfo {
+  string payment_id = 1;
+  int64 amount_cents = 2;
+  string currency = 3;
+  PaymentStatus status = 4;
+  int64 created_at = 5;
+}
+
+message VerifyIntegrityRequest {
+  string payment_id = 1;
+}
+
+message VerifyIntegrityResponse {
+  bool valid = 1;
+  string blockchain_hash = 2;
+  string ipfs_cid = 3;
+  int64 verified_at = 4;
+}

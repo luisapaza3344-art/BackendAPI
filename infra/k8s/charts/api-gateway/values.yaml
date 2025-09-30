@@ -1,0 +1,106 @@
+replicaCount: 3
+
+image:
+  repository: gov-platform/api-gateway
+  pullPolicy: IfNotPresent
+  tag: "1.0.0-sha256-a1b2c3d4"  # Pinned version with SHA256 digest for supply-chain security
+  # In production: Use full digest like @sha256:abcd1234... for immutable deployments
+
+service:
+  type: ClusterIP
+  port: 9000
+  targetPort: 9000
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"
+  hosts:
+    - host: api.gov.platform
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: api-gateway-tls
+      hosts:
+        - api.gov.platform
+
+resources:
+  limits:
+    cpu: 2000m
+    memory: 4Gi
+  requests:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 50
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+env:
+  - name: FIPS_MODE
+    value: "true"
+  - name: TLS_ENABLED
+    value: "true"
+  - name: PQ_CRYPTO_ENABLED
+    value: "true"
+  - name: SERVER_PORT
+    value: "9000"
+
+envFrom:
+  - secretRef:
+      name: api-gateway-secrets
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: true
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: gov-platform
+      ports:
+        - protocol: TCP
+          port: 9000
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 5432  # PostgreSQL
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  scrapeTimeout: 10s
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

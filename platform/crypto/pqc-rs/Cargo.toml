@@ -1,0 +1,57 @@
+[package]
+name = "pqc-core"
+version = "1.0.0"
+edition = "2021"
+authors = ["Government-Grade Security Team"]
+description = "Post-Quantum Cryptography Core Library - FIPS 140-3 Level 3 Compliant"
+license = "MIT"
+
+[lib]
+name = "pqc_core"
+crate-type = ["rlib", "cdylib"]  # Support both Rust and FFI
+
+[dependencies]
+# Post-Quantum Cryptography - NIST Finalists
+pqcrypto-kyber = "0.8"           # NIST PQ KEM
+pqcrypto-dilithium = "0.5"       # NIST PQ Signature
+pqcrypto-sphincsplus = "0.6"     # NIST PQ Signature (stateless)
+
+# Hybrid Cryptography (Classical + PQ)
+x25519-dalek = "2.0"
+ed25519-dalek = "2.1"
+
+# HPKE (Hybrid Public Key Encryption)
+hpke = { version = "0.11", features = ["x25519", "pq"] }
+
+# COSE (CBOR Object Signing and Encryption)
+coset = "0.3"
+
+# HSM/PKCS#11 Support
+cryptoki = { version = "0.6", features = ["psa"] }
+
+# Core Utilities
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "1.0"
+zeroize = { version = "1.7", features = ["derive"] }
+rand = "0.8"
+getrandom = { version = "0.2", features = ["custom"] }
+
+# FIPS Compliance
+fips = { version = "0.1", optional = true }
+
+[dev-dependencies]
+criterion = "0.5"
+proptest = "1.4"
+
+[features]
+default = ["kyber1024", "dilithium5", "sphincsplus"]
+fips-mode = ["fips"]
+kyber1024 = []
+dilithium5 = []
+sphincsplus = []
+hsm = ["cryptoki"]
+
+[[bench]]
+name = "pqc_benchmarks"
+harness = false

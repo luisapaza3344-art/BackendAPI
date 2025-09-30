@@ -1,0 +1,24 @@
+[project]
+name = "pqc-gov"
+version = "1.0.0"
+description = "Government-Grade Post-Quantum Cryptography for Python Services"
+authors = [{name = "Government Security Team"}]
+requires-python = ">=3.11"
+dependencies = [
+    "oqs-python>=0.9.0",        # Open Quantum Safe - NIST PQC
+    "pycryptodome>=3.19.0",     # Classical crypto primitives
+    "cryptography>=41.0.7",     # FIPS-compliant crypto
+    "pynacl>=1.5.0",            # NaCl/libsodium bindings
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.12.1",
+    "mypy>=1.8.0",
+]
+
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"

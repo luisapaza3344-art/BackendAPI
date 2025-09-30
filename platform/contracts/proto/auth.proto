@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+package gov.platform.auth.v1;
+
+option go_package = "platform/contracts/gen/go/auth/v1;authv1";
+
+// AuthService provides quantum-resistant authentication and authorization
+service AuthService {
+  // Authenticate user with post-quantum credentials
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse);
+  
+  // ValidateToken verifies JWT with PQ signature
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+  
+  // RefreshToken generates new token with rotation
+  rpc RefreshToken(RefreshTokenRequest) returns (RefreshTokenResponse);
+  
+  // WebAuthn registration (FIDO2 + PQ hybrid)
+  rpc BeginWebAuthnRegistration(WebAuthnBeginRequest) returns (WebAuthnBeginResponse);
+  rpc FinishWebAuthnRegistration(WebAuthnFinishRequest) returns (WebAuthnFinishResponse);
+}
+
+message AuthenticateRequest {
+  string username = 1;
+  string password_hash = 2;  // Never send plain passwords
+  string mfa_token = 3;       // 2FA for merchant/admin
+  bytes pq_signature = 4;     // Dilithium-5 signature
+}
+
+message AuthenticateResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_at = 3;
+  UserInfo user = 4;
+  bytes pq_proof = 5;  // Zero-knowledge proof
+}
+
+message ValidateTokenRequest {
+  string token = 1;
+  repeated string required_permissions = 2;
+}
+
+message ValidateTokenResponse {
+  bool valid = 1;
+  string user_id = 2;
+  repeated string permissions = 3;
+  int64 expires_at = 4;
+}
+
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}
+
+message RefreshTokenResponse {
+  string access_token = 1;
+  string refresh_token = 2;
+  int64 expires_at = 3;
+}
+
+message WebAuthnBeginRequest {
+  string user_id = 1;
+}
+
+message WebAuthnBeginResponse {
+  bytes challenge = 1;
+  string session_id = 2;
+}
+
+message WebAuthnFinishRequest {
+  string session_id = 1;
+  bytes credential_response = 2;
+}
+
+message WebAuthnFinishResponse {
+  bool success = 1;
+  string credential_id = 2;
+}
+
+message UserInfo {
+  string id = 1;
+  string username = 2;
+  string email = 3;
+  repeated string roles = 4;
+  repeated string permissions = 5;
+}
