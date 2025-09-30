@@ -5,7 +5,8 @@ interface ServiceStatus {
   name: string;
   url: string;
   description: string;
-  status: 'pending' | 'success' | 'error' | 'timeout';
+  enabled: boolean;
+  status: 'pending' | 'success' | 'error' | 'timeout' | 'disabled';
   response?: any;
   error?: string;
   latency?: number;
@@ -13,44 +14,46 @@ interface ServiceStatus {
 
 const SERVICES = [
   {
+    name: 'Ultra Inventory System',
+    url: '/api/health',
+    description: 'Backend API - Categories, Products & Collections',
+    enabled: true
+  },
+  {
     name: 'API Gateway',
-    url: `${import.meta.env.VITE_BACKEND_URL || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:9000'}/health`,
-    description: 'Enterprise API Gateway'
+    url: '',
+    description: 'Enterprise API Gateway (Not Running)',
+    enabled: false
   },
   {
     name: 'Payment Gateway',
-    url: `${import.meta.env.VITE_PAYMENT_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8080'}/health`,
-    description: 'Quantum-resistant Payment Processing'
-  },
-  {
-    name: 'Ultra Inventory',
-    url: `${import.meta.env.VITE_INVENTORY_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:3000'}/health`,
-    description: 'Ultra Inventory Management System'
+    url: '',
+    description: 'Quantum-resistant Payment Processing (Not Running)',
+    enabled: false
   },
   {
     name: 'Ultra Shipping',
-    url: `${import.meta.env.VITE_SHIPPING_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:6800'}/health`,
-    description: 'Ultra Shipping Service with AI Optimization'
+    url: '',
+    description: 'Ultra Shipping Service with AI Optimization (Not Running)',
+    enabled: false
   },
   {
     name: 'Auth Service',
-    url: `${import.meta.env.VITE_AUTH_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8099'}/health`,
-    description: 'WebAuthn & DID Authentication'
+    url: '',
+    description: 'WebAuthn & DID Authentication (Not Running)',
+    enabled: false
   },
   {
     name: 'Advanced Analytics',
-    url: `${import.meta.env.VITE_ANALYTICS_API || 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev'}/health`,
-    description: 'AI/ML Analytics & Fraud Detection'
+    url: '',
+    description: 'AI/ML Analytics & Fraud Detection (Not Running)',
+    enabled: false
   },
   {
     name: 'Security Service',
-    url: 'https://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:8000/health',
-    description: 'FIPS 140-3 Security & Audit Trail'
-  },
-  {
-    name: 'Ultra Professional Frontend',
-    url: window.location.origin + '/api/health',
-    description: 'React TypeScript Frontend with Health Monitoring'
+    url: '',
+    description: 'FIPS 140-3 Security & Audit Trail (Not Running)',
+    enabled: false
   }
 ];
 
@@ -62,11 +65,19 @@ export default function HealthCheck() {
   const [wsStatus, setWsStatus] = useState<'pending' | 'connected' | 'error'>('pending');
 
   const checkService = async (service: typeof SERVICES[0]): Promise<ServiceStatus> => {
+    if (!service.enabled) {
+      return {
+        ...service,
+        status: 'disabled',
+        error: 'Service not running'
+      };
+    }
+
     const startTime = Date.now();
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       const response = await fetch(service.url, {
         method: 'GET',
@@ -108,29 +119,7 @@ export default function HealthCheck() {
   };
 
   const checkWebSocket = () => {
-    const wsUrl = import.meta.env.VITE_WS_URL || 'wss://85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev:9000';
-    
-    try {
-      const ws = new WebSocket(wsUrl);
-      
-      const timeout = setTimeout(() => {
-        ws.close();
-        setWsStatus('error');
-      }, 5000);
-      
-      ws.onopen = () => {
-        clearTimeout(timeout);
-        setWsStatus('connected');
-        ws.close();
-      };
-      
-      ws.onerror = () => {
-        clearTimeout(timeout);
-        setWsStatus('error');
-      };
-    } catch (error) {
-      setWsStatus('error');
-    }
+    setWsStatus('error');
   };
 
   const runHealthCheck = async () => {
@@ -163,6 +152,8 @@ export default function HealthCheck() {
         return <XCircle className="w-5 h-5 text-red-500" />;
       case 'timeout':
         return <AlertCircle className="w-5 h-5 text-orange-500" />;
+      case 'disabled':
+        return <AlertCircle className="w-5 h-5 text-gray-400" />;
       default:
         return <RefreshCw className="w-5 h-5 text-gray-400 animate-spin" />;
     }
