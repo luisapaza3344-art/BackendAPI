@@ -126,6 +126,7 @@ pub async fn auth_middleware(
                             path == "/integrity" ||
                             path == "/ready" ||
                             path.starts_with("/public/") ||
+                            path == "/v1/payments/stripe/create-payment-intent" ||
                             std::env::var("PUBLIC_ENDPOINTS")
                                 .unwrap_or_default()
                                 .split(',')

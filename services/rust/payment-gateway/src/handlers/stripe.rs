@@ -103,6 +103,20 @@ pub struct StripeWebhookPayload {
     pub event_type: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct CreatePaymentIntentRequest {
+    pub amount: u64,
+    pub currency: Option<String>,
+    pub temp_payment_id: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CreatePaymentIntentResponse {
+    pub id: String,
+    pub client_secret: String,
+    pub status: String,
+}
+
 /// Process Stripe payment with enterprise post-quantum cryptography and AI fraud detection
 /// 
 /// This handler implements:
@@ -948,3 +962,69 @@ pub async fn handle_webhook(
     Ok(StatusCode::OK)
 }
 
+/// Create Stripe Payment Intent - Simple endpoint for frontend
+/// Returns client_secret for Stripe.js to complete payment
+pub async fn create_payment_intent(
+    State(state): State<AppState>,
+    Json(payload): Json<CreatePaymentIntentRequest>,
+) -> Result<Json<CreatePaymentIntentResponse>, (StatusCode, String)> {
+    info!(
+        "💳 Creating Stripe payment intent: amount={} temp_payment_id={}", 
+        payload.amount, payload.temp_payment_id
+    );
+
+    // Get Stripe API key from environment
+    let stripe_secret_key = std::env::var("STRIPE_SECRET_KEY")
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Payment service configuration error".to_string()))?;
+    
+    let currency = payload.currency.unwrap_or_else(|| "usd".to_string());
+    
+    // Create Stripe PaymentIntent
+    let client = reqwest::Client::new();
+    let response = client
+        .post("https://api.stripe.com/v1/payment_intents")
+        .header("Authorization", format!("Bearer {}", stripe_secret_key))
+        .header("Content-Type", "application/x-www-form-urlencoded")
+        .header("Stripe-Version", "2023-10-16")
+        .form(&[
+            ("amount", payload.amount.to_string().as_str()),
+            ("currency", currency.as_str()),
+            ("automatic_payment_methods[enabled]", "true"),
+            ("metadata[temp_payment_id]", payload.temp_payment_id.as_str()),
+        ])
+        .send()
+        .await
+        .map_err(|e| {
+            error!("Stripe API request failed: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Payment service temporarily unavailable".to_string())
+        })?;
+    
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_default();
+        error!("Stripe PaymentIntent creation failed: {}", error_text);
+        return Err((StatusCode::PAYMENT_REQUIRED, "Failed to initialize payment".to_string()));
+    }
+    
+    let payment_intent: serde_json::Value = response.json().await
+        .map_err(|e| {
+            error!("Failed to parse Stripe response: {}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Payment service error".to_string())
+        })?;
+    
+    let intent_id = payment_intent["id"].as_str()
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid payment response".to_string()))?;
+    
+    let client_secret = payment_intent["client_secret"].as_str()
+        .ok_or_else(|| (StatusCode::INTERNAL_SERVER_ERROR, "Invalid payment response".to_string()))?;
+    
+    let status = payment_intent["status"].as_str()
+        .unwrap_or("requires_payment_method");
+    
+    info!("✅ Stripe PaymentIntent created: {} status={}", intent_id, status);
+    
+    Ok(Json(CreatePaymentIntentResponse {
+        id: intent_id.to_string(),
+        client_secret: client_secret.to_string(),
+        status: status.to_string(),
+    }))
+}

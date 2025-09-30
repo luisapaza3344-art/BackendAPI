@@ -53,6 +53,16 @@ export default defineConfig({
     port: 5000,
     host: "0.0.0.0",
     proxy: {
+      '/api/payments': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/payments/, '/v1/payments'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('Payment Gateway proxy error:', err.message);
+          });
+        },
+      },
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,

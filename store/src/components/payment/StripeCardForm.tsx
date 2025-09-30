@@ -36,23 +36,53 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
   const [clientSecret, setClientSecret] = useState<string>('');
 
   /**
-   * Initialize payment - for demo purposes
-   * TODO: Connect to Payment Gateway for production
+   * Get client secret from Payment Gateway
    */
   useEffect(() => {
-    // For demo/testing, generate a mock client secret
-    // In production, this would come from the Payment Gateway
-    if (tempPaymentId) {
-      // Mock client secret for testing - payment will be processed by Stripe in test mode
-      const mockClientSecret = `pi_demo_${tempPaymentId}_secret_${tempPaymentId}`;
-      setClientSecret(mockClientSecret);
+    const getClientSecret = async () => {
+      if (!tempPaymentId) return;
       
-      SecurityService.logSecurityEvent('stripe_payment_demo_initialized', {
-        tempPaymentId,
-        note: 'Using test mode - connect Payment Gateway for production'
-      });
-    }
-  }, [tempPaymentId]);
+      try {
+        // Call Payment Gateway to create payment intent
+        const response = await fetch('/api/payments/stripe/create-payment-intent', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            amount: 1000, // TODO: Get from cart total
+            currency: 'usd',
+            temp_payment_id: tempPaymentId,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('Failed to create payment intent:', errorText);
+          throw new Error('Failed to initialize payment');
+        }
+
+        const data = await response.json();
+        
+        if (!data.client_secret) {
+          throw new Error('Invalid payment response');
+        }
+
+        setClientSecret(data.client_secret);
+        
+        SecurityService.logSecurityEvent('stripe_payment_intent_created', {
+          paymentIntentId: data.id,
+          tempPaymentId,
+          status: data.status
+        });
+      } catch (error) {
+        console.error('Failed to get client secret:', error);
+        onError('Failed to initialize payment. Please try again.');
+      }
+    };
+
+    getClientSecret();
+  }, [tempPaymentId, onError]);
 
   /**
    * Handle secure card payment submission
