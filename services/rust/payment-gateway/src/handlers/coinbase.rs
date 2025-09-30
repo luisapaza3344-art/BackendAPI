@@ -64,6 +64,14 @@ fn parse_money_to_cents(amount_str: &str) -> anyhow::Result<u64> {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SimpleCoinbaseRequest {
+    pub temp_payment_id: Option<String>,
+    pub shipping_info: Option<serde_json::Value>,
+    pub redirect_url: Option<String>,
+    pub cancel_url: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct EnterpriseQuantumCoinbaseRequest {
     pub name: String, // Charge name
     pub description: String,
@@ -2637,8 +2645,96 @@ async fn determine_primary_jurisdiction(payload: &EnterpriseQuantumCoinbaseReque
     }
 }
 
-/// Main entry point for enterprise quantum Coinbase payment processing
+/// Simplified entry point for frontend Coinbase payment processing
 pub async fn process_payment(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(simple_payload): Json<SimpleCoinbaseRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    let processing_start = std::time::Instant::now();
+    
+    info!("🚀 Processing simple Coinbase crypto payment from frontend");
+    
+    // Fetch cart details from temp_payment_id
+    let temp_payment_id = simple_payload.temp_payment_id
+        .ok_or_else(|| {
+            error!("Missing temp_payment_id in request");
+            StatusCode::BAD_REQUEST
+        })?;
+    
+    // Query database for cart details via payment service
+    let (amount_cents, currency) = state.payment_service
+        .get_cart_details(&temp_payment_id)
+        .await
+        .map_err(|e| {
+            error!("Failed to fetch cart details: {}", e);
+            StatusCode::NOT_FOUND
+        })?;
+    
+    // Convert to dollars for Coinbase
+    let amount_dollars = format!("{:.2}", amount_cents as f64 / 100.0);
+    
+    info!("Cart details: amount={} {}", amount_dollars, currency);
+    
+    // Convert simple request to enterprise request with sensible defaults
+    let enterprise_payload = EnterpriseQuantumCoinbaseRequest {
+        name: format!("Order Payment {}", temp_payment_id),
+        description: "Cryptocurrency payment for your order".to_string(),
+        pricing_type: "fixed_price".to_string(),
+        local_price: CoinbaseLocalPrice {
+            amount: amount_dollars,
+            currency: currency.clone(),
+        },
+        requested_info: Some(vec!["name".to_string(), "email".to_string()]),
+        redirect_url: simple_payload.redirect_url,
+        cancel_url: simple_payload.cancel_url,
+        quantum_zkp_proof: None,
+        post_quantum_signature: None,
+        blockchain_validation: None,
+        crypto_payment_type: None,
+        multi_signature_config: None,
+        escrow_config: None,
+        recurring_payment: None,
+        customer_info: None,
+        blockchain_risk_assessment: None,
+        defi_integration: None,
+        nft_payment_config: None,
+        cross_chain_config: None,
+        enterprise_metadata: None,
+    };
+
+    // Create payment request
+    let payment_id = Uuid::new_v4();
+    let payment_request = PaymentRequest {
+        id: payment_id,
+        provider: "coinbase".to_string(),
+        amount: amount_cents as u64,
+        currency: currency,
+        customer_id: None,
+        metadata: Some(serde_json::json!({
+            "crypto_payment": true,
+            "coinbase_processing": true,
+            "temp_payment_id": temp_payment_id
+        })),
+        created_at: chrono::Utc::now(),
+    };
+    
+    match process_coinbase_payment_internal(&state, &payment_request, &enterprise_payload).await {
+        Ok(response) => {
+            let total_time = processing_start.elapsed().as_millis() as u64;
+            info!("✅ Coinbase payment processed successfully: {}ms", total_time);
+            Ok(Json(serde_json::to_value(response).unwrap_or_default()))
+        },
+        Err(e) => {
+            let total_time = processing_start.elapsed().as_millis() as u64;
+            error!("❌ Coinbase payment failed: {} ({}ms)", e, total_time);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+/// Enterprise entry point for advanced Coinbase payment processing
+pub async fn process_payment_enterprise(
     State(state): State<AppState>,
     headers: HeaderMap,
     Json(payload): Json<EnterpriseQuantumCoinbaseRequest>,

@@ -54,6 +54,12 @@ impl PaymentService {
         Ok(status)
     }
 
+    /// Get cart details from temporary payment
+    pub async fn get_cart_details(&self, temp_payment_id: &str) -> Result<(i64, String)> {
+        info!("Fetching cart details for temp_payment_id: {}", temp_payment_id);
+        self.db.get_cart_details(temp_payment_id).await
+    }
+
     /// Check database connectivity and health status
     /// 
     /// Verifies that the PostgreSQL connection is working properly

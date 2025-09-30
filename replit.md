@@ -42,6 +42,19 @@ The platform includes an Ultra Category Management and Ultra Collection System w
 - **Automated Compliance**: CI/CD gates and policy engines enforce security standards.
 - **Comprehensive Testing Framework**: End-to-end testing, security testing (FIPS, PQC, ZKP), performance testing, and webhook security testing.
 
+## Recent Changes
+
+### September 30, 2025 - Coinbase Payment Endpoint Fix
+- **Issue Resolved**: Fixed 422 Unprocessable Entity error on Coinbase payment endpoint
+- **Root Cause**: Frontend sent simple JSON structure but backend expected complex enterprise structure
+- **Solution Implemented**:
+  - Added `SimpleCoinbaseRequest` for frontend compatibility
+  - Created database query method to fetch cart details from `temp_payments` table
+  - Handler now accepts simple frontend data, enriches with cart details, and converts to enterprise structure
+  - Maintained all enterprise features (fraud detection, PCI-DSS compliance, quantum cryptography)
+- **Architecture**: Dual-mode handler supporting both simple frontend calls and advanced enterprise usage
+- **Security**: Parameterized queries, proper error handling (400/404), all fraud/PCI controls remain active
+
 ## Production Readiness Status
 
 ### ✅ GOVERNMENT-GRADE STRUCTURE COMPLETE

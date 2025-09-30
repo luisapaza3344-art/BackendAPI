@@ -88,6 +88,28 @@ impl DatabaseRepository {
         Ok(())
     }
 
+    /// Get cart details from temporary payment
+    pub async fn get_cart_details(&self, temp_payment_id: &str) -> Result<(i64, String)> {
+        let query = r#"
+            SELECT total_amount, currency 
+            FROM temp_payments 
+            WHERE temp_payment_id = $1 
+            ORDER BY created_at DESC 
+            LIMIT 1
+        "#;
+        
+        let row = sqlx::query(query)
+            .bind(temp_payment_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to fetch cart details: {}", e))?;
+        
+        let total_amount: i64 = row.try_get("total_amount")?;
+        let currency: String = row.try_get("currency")?;
+        
+        Ok((total_amount, currency))
+    }
+
     /// Check database connection health
     /// 
     /// Performs a basic connectivity test to verify PostgreSQL is responding
