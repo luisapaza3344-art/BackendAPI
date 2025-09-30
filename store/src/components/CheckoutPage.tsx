@@ -966,7 +966,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                             try {
                               setIsProcessing(true);
                               
-                              const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/paypal/create-order`, {
+                              const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/paypal`, {
                                 method: 'POST',
                                 headers: {
                                   'Content-Type': 'application/json',

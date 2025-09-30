@@ -73,6 +73,16 @@ export default defineConfig({
           });
         },
       },
+      '/api/paypal': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/paypal/, '/v1/payments/paypal'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('PayPal proxy error:', err.message);
+          });
+        },
+      },
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,
