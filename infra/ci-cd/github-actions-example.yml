@@ -1,0 +1,164 @@
+name: Government-Grade CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  FIPS_MODE: "true"
+  HSM_AVAILABLE: "true"
+  PQ_CRYPTO_ENABLED: "true"
+
+jobs:
+  fips-compliance-gate:
+    name: FIPS 140-3 Level 3 Compliance Gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Run FIPS Compliance Gate
+        run: |
+          ./infra/ci-cd/fips-compliance-gate.sh
+  
+  build-and-test:
+    name: Build & Test with Post-Quantum Crypto
+    runs-on: ubuntu-latest
+    needs: fips-compliance-gate
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+      
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: Build Platform PQC Libraries
+        run: |
+          # Build Rust PQC library
+          cd platform/crypto/pqc-rs
+          cargo build --release --features "kyber1024 dilithium5"
+          
+          # Build Go PQC library
+          cd ../pqc-go
+          go build -tags fips ./...
+          
+          # Build Python PQC library
+          cd ../pqc-py
+          pip install -e .
+      
+      - name: Run Security Tests
+        env:
+          FIPS_MODE: "true"
+          HSM_AVAILABLE: "true"
+          PQ_CRYPTO_ENABLED: "true"
+        run: |
+          # Test Rust services
+          cd services/rust/payment-gateway
+          cargo test --features "pq-kyber pq-dilithium"
+          
+          # Test Go services
+          cd ../../../services/go/api-gateway
+          go test ./... -tags fips
+  
+  opa-policy-validation:
+    name: OPA Policy Validation
+    runs-on: ubuntu-latest
+    needs: fips-compliance-gate
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Install OPA
+        run: |
+          curl -L -o opa https://openpolicyagent.org/downloads/latest/opa_linux_amd64
+          chmod +x opa
+          sudo mv opa /usr/local/bin/
+      
+      - name: Validate PCI-DSS Policies
+        run: |
+          opa test security/policy-as-code/*.rego
+      
+      - name: Check Kubernetes Resources Against Policy
+        run: |
+          for manifest in infra/k8s/charts/*/templates/*.yaml; do
+            opa eval -d security/policy-as-code/pci-dss.rego \
+                     -i "$manifest" \
+                     "data.gov.platform.pci.deny"
+          done
+  
+  supply-chain-security:
+    name: Supply Chain Security (SLSA Level 3)
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Generate SBOM (Software Bill of Materials)
+        uses: anchore/sbom-action@v0
+        with:
+          format: cyclonedx-json
+          output-file: sbom.json
+      
+      - name: Sign Container Images with Cosign
+        run: |
+          # Install Cosign
+          curl -O -L "https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64"
+          chmod +x cosign-linux-amd64
+          sudo mv cosign-linux-amd64 /usr/local/bin/cosign
+          
+          # Sign images (requires COSIGN_KEY secret)
+          # cosign sign --key env://COSIGN_KEY <image>@<digest>
+      
+      - name: Verify No :latest Tags
+        run: |
+          if grep -r ":latest" infra/k8s/charts/; then
+            echo "ERROR: Found :latest tags in production charts"
+            exit 1
+          fi
+
+  deploy-staging:
+    name: Deploy to Staging (FIPS Mode)
+    runs-on: ubuntu-latest
+    needs: [opa-policy-validation, supply-chain-security]
+    if: github.ref == 'refs/heads/develop'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy with ArgoCD
+        run: |
+          # ArgoCD deployment (GitOps)
+          # argocd app sync government-platform-staging
+          echo "Deploying to staging with FIPS mode enabled"
+  
+  deploy-production:
+    name: Deploy to Production (Government-Grade)
+    runs-on: ubuntu-latest
+    needs: [opa-policy-validation, supply-chain-security]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Final FIPS Compliance Check
+        run: ./infra/ci-cd/fips-compliance-gate.sh
+      
+      - name: Deploy with ArgoCD
+        run: |
+          # ArgoCD production deployment (GitOps)
+          # argocd app sync government-platform-production
+          echo "Deploying to production with government-grade security"

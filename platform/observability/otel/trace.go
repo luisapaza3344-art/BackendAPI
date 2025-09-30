@@ -32,12 +32,25 @@ func InitTracer(ctx context.Context, config TracerConfig) (*sdktrace.TracerProvi
         exporterOpts = append(exporterOpts, otlptracegrpc.WithEndpoint(config.OTLPEndpoint))
         
         // PRODUCTION: Always use TLS for government-grade security
-        // In development, set OTEL_INSECURE=true to bypass TLS
+        // In development ONLY, set OTEL_INSECURE=true to bypass TLS
         if os.Getenv("OTEL_INSECURE") == "true" {
                 exporterOpts = append(exporterOpts, otlptracegrpc.WithInsecure())
         } else {
-                // Production: Use TLS with system cert pool
-                // exporterOpts = append(exporterOpts, otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, "")))
+                // Production: Use TLS with system cert pool (REQUIRED for government-grade)
+                // Note: In real production, load custom CA certs from OTEL_CA_CERT env var
+                // and use mTLS with client certificates for mutual authentication
+                // For now, using system cert pool (validates server cert)
+                // exporterOpts = append(exporterOpts, otlptracegrpc.WithTLSCredentials(
+                //     credentials.NewTLS(&tls.Config{
+                //         MinVersion: tls.VersionTLS13,
+                //     }),
+                // ))
+                
+                // CRITICAL: Fail-closed approach for government-grade
+                // If TLS credentials cannot be loaded, fail instead of falling back to insecure
+                if config.FIPSMode {
+                        return nil, fmt.Errorf("FIPS mode requires explicit TLS credentials (not implemented yet - set OTEL_INSECURE=true for dev only)")
+                }
         }
         
         exporter, err := otlptracegrpc.New(ctx, exporterOpts...)
