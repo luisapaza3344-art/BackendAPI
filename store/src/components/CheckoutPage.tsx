@@ -94,8 +94,22 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
     expiresAt: number;
   } | null>(null);
 
+  // Shipping rates state
+  const [shippingRates, setShippingRates] = useState<Array<{
+    carrier: string;
+    service: string;
+    rate: number;
+    currency: string;
+    estimated_days: string;
+    fallback?: boolean;
+  }>>([]);
+  const [selectedShippingRate, setSelectedShippingRate] = useState<number>(0);
+  const [loadingShipping, setLoadingShipping] = useState(false);
+
   const totalPrice = getTotalPrice();
-  const shippingCost = totalPrice >= 100 ? 0 : 15.00;
+  const shippingCost = shippingRates.length > 0 && selectedShippingRate >= 0 
+    ? shippingRates[selectedShippingRate].rate 
+    : 0;
   const tax = calculateTax(totalPrice, shippingInfo.country, shippingInfo.state);
   const finalTotal = totalPrice + shippingCost + tax;
 
@@ -229,6 +243,87 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
   };
 
   /**
+   * Fetch shipping rates from Ultra Shipping Service
+   */
+  const fetchShippingRates = async () => {
+    // Only fetch if we have a complete shipping address
+    if (!shippingInfo.address || !shippingInfo.city || !shippingInfo.state || !shippingInfo.zipCode) {
+      return;
+    }
+
+    setLoadingShipping(true);
+    
+    try {
+      // Calculate total package weight and dimensions from cart items
+      // For now, use reasonable defaults - in production, get from product data
+      const packageWeight = items.reduce((total, item) => total + (item.quantity * 2), 0); // Assume 2kg per item
+      
+      const response = await fetch('/api/shipping/rates', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          destination_address: {
+            name: `${shippingInfo.firstName} ${shippingInfo.lastName}`,
+            street1: shippingInfo.address,
+            street2: null,
+            city: shippingInfo.city,
+            state: shippingInfo.state,
+            zip: shippingInfo.zipCode,
+            country: shippingInfo.country
+          },
+          package_weight_kg: packageWeight,
+          package_dimensions: {
+            length_cm: 30,
+            width_cm: 20,
+            height_cm: 15
+          }
+        })
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.rates && Array.isArray(data.rates)) {
+          setShippingRates(data.rates);
+          setSelectedShippingRate(0); // Select first rate by default
+          
+          SecurityService.logSecurityEvent('shipping_rates_fetched', {
+            ratesCount: data.rates.length,
+            destination: `${shippingInfo.city}, ${shippingInfo.state}`
+          });
+        }
+      } else {
+        // Use fallback rate if service fails
+        setShippingRates([{
+          carrier: 'Standard Shipping',
+          service: 'Ground',
+          rate: 9.99,
+          currency: 'USD',
+          estimated_days: '5-7',
+          fallback: true
+        }]);
+        setSelectedShippingRate(0);
+      }
+    } catch (error) {
+      console.error('Failed to fetch shipping rates:', error);
+      
+      // Use fallback rate
+      setShippingRates([{
+        carrier: 'Standard Shipping',
+        service: 'Ground',
+        rate: 9.99,
+        currency: 'USD',
+        estimated_days: '5-7',
+        fallback: true
+      }]);
+      setSelectedShippingRate(0);
+    } finally {
+      setLoadingShipping(false);
+    }
+  };
+
+  /**
    * Ultra-secure form submission
    * SECURITY: Only validates form and calls backend - NO payment processing in frontend
    */
@@ -287,6 +382,18 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
       initializeSecureCheckout();
     }
   }, [items.length]);
+
+  // Fetch shipping rates when address is complete
+  useEffect(() => {
+    if (shippingInfo.address && shippingInfo.city && shippingInfo.state && shippingInfo.zipCode) {
+      // Debounce: wait 500ms after user stops typing
+      const timer = setTimeout(() => {
+        fetchShippingRates();
+      }, 500);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [shippingInfo.address, shippingInfo.city, shippingInfo.state, shippingInfo.zipCode]);
 
   // Set up authentication tokens for live payments
   useEffect(() => {
@@ -714,6 +821,64 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                   </div>
                 </div>
               </div>
+
+              {/* Shipping Options */}
+              {shippingRates.length > 0 && (
+                <div>
+                  <h2 className="text-xl font-light text-foreground mb-6 flex items-center">
+                    <Truck className="w-5 h-5 mr-2" />
+                    Shipping Method
+                  </h2>
+                  
+                  {loadingShipping && (
+                    <div className="text-sm text-muted-foreground mb-4">
+                      Calculating shipping rates...
+                    </div>
+                  )}
+                  
+                  <div className="space-y-3">
+                    {shippingRates.map((rate, index) => (
+                      <div
+                        key={index}
+                        onClick={() => setSelectedShippingRate(index)}
+                        className={`relative flex items-center justify-between p-4 border rounded-lg cursor-pointer transition-all ${
+                          selectedShippingRate === index
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:border-primary/50'
+                        }`}
+                      >
+                        <div className="flex items-center">
+                          <div className={`w-4 h-4 rounded-full border-2 mr-3 flex items-center justify-center ${
+                            selectedShippingRate === index
+                              ? 'border-primary'
+                              : 'border-gray-300'
+                          }`}>
+                            {selectedShippingRate === index && (
+                              <div className="w-2 h-2 rounded-full bg-primary" />
+                            )}
+                          </div>
+                          <div>
+                            <div className="font-medium text-foreground">
+                              {rate.carrier} - {rate.service}
+                            </div>
+                            <div className="text-sm text-muted-foreground">
+                              Estimated delivery: {rate.estimated_days} business days
+                            </div>
+                            {rate.fallback && (
+                              <div className="text-xs text-amber-600 mt-1">
+                                Standard rate applied
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-lg font-medium text-foreground">
+                          ${rate.rate.toFixed(2)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 

@@ -1,9 +1,11 @@
 use axum::{
     extract::{State, Path, Query, Multipart},
-    http::StatusCode,
+    http::{StatusCode, Request},
     response::Json,
     routing::{get, post, put, delete},
     Router,
+    middleware::{self, Next},
+    body::Body,
 };
 use serde::{Deserialize, Serialize};
 use std::{env, sync::Arc, collections::HashMap};
@@ -2460,6 +2462,44 @@ fn is_international_shipment(origin_country: &str, destination_country: &str) ->
 // Calcular ahorros por consolidación
 
 // ========================================================================
+// 🔐 AUTHENTICATION MIDDLEWARE
+// ========================================================================
+
+/// Basic authentication middleware for admin endpoints
+/// TODO: Replace with proper JWT validation and role-based access control
+/// This is a placeholder implementation - DO NOT USE IN PRODUCTION without proper JWT validation
+async fn admin_auth_middleware(
+    request: Request<Body>,
+    next: Next,
+) -> Result<axum::response::Response, StatusCode> {
+    // Extract headers from request
+    let auth_header = request.headers().get("Authorization");
+    
+    // Check for Authorization header
+    match auth_header {
+        Some(header_value) => {
+            let auth_str = header_value.to_str().map_err(|_| StatusCode::UNAUTHORIZED)?;
+            
+            // TODO: Validate JWT token here
+            // For now, just check that some authorization header exists
+            if auth_str.starts_with("Bearer ") {
+                // In production, verify the JWT token with the Auth Service
+                // and check for admin role
+                info!("🔐 Admin request authorized (placeholder validation)");
+                Ok(next.run(request).await)
+            } else {
+                warn!("❌ Unauthorized admin access attempt");
+                Err(StatusCode::UNAUTHORIZED)
+            }
+        }
+        None => {
+            warn!("❌ Missing Authorization header for admin endpoint");
+            Err(StatusCode::UNAUTHORIZED)
+        }
+    }
+}
+
+// ========================================================================
 // 🔐 ADMIN ENDPOINTS - PRIVATE ACCESS ONLY
 // ========================================================================
 
@@ -2779,13 +2819,19 @@ async fn main() -> anyhow::Result<()> {
         // 🚀 SHIPPING INTEGRATION
         .route("/shipping/info", get(get_shipping_service_info))
         .route("/shipping/rates", post(get_shipping_rates))
-        
-        // 🔐 ADMIN-ONLY ENDPOINTS (TODO: Add authentication middleware)
-        .route("/admin/products/:id/cost-price", put(update_product_cost_price))
-        .route("/admin/stats", get(get_admin_stats))
-        
         .layer(CorsLayer::permissive())
-        .with_state(state);
+        .with_state(state.clone());
+    
+    // 🔐 ADMIN ROUTES - Protected by authentication middleware
+    let admin_routes = Router::new()
+        .route("/products/:id/cost-price", put(update_product_cost_price))
+        .route("/stats", get(get_admin_stats))
+        .layer(middleware::from_fn(admin_auth_middleware))
+        .layer(CorsLayer::permissive())
+        .with_state(state.clone());
+    
+    // Combine all routes
+    let app = app.nest("/admin", admin_routes);
     
     // Start server
     let port = env::var("INVENTORY_PORT").unwrap_or_else(|_| "8000".to_string());
