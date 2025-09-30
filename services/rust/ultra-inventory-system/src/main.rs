@@ -2666,12 +2666,22 @@ async fn get_admin_stats(
 }
 
 // 📦 Get shipping rates from Ultra Shipping Service
-// Note: ShippingAddress already defined at line 2333
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ShippingRateRequest {
-    pub destination_address: ShippingAddress,
+    pub from_address: ShippingServiceAddress,
+    pub destination_address: ShippingServiceAddress,
     pub package_weight_kg: Decimal,
     pub package_dimensions: PackageDimensions,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ShippingServiceAddress {
+    pub name: String,
+    pub street1: String,
+    pub city: String,
+    pub state: String,
+    pub zip: String,
+    pub country: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -2693,18 +2703,80 @@ async fn get_shipping_rates(
     
     let rates_url = format!("{}/rates", shipping_service_url);
     
+    // Transform request to Ultra Shipping Service format
+    let shipping_request = serde_json::json!({
+        "from_address": {
+            "name": request.from_address.name,
+            "street1": request.from_address.street1,
+            "city": request.from_address.city,
+            "state": request.from_address.state,
+            "zip": request.from_address.zip,
+            "country": request.from_address.country,
+        },
+        "to_address": {
+            "name": request.destination_address.name,
+            "street1": request.destination_address.street1,
+            "city": request.destination_address.city,
+            "state": request.destination_address.state,
+            "zip": request.destination_address.zip,
+            "country": request.destination_address.country,
+        },
+        "package": {
+            "weight": request.package_weight_kg,
+            "length": request.package_dimensions.length_cm,
+            "width": request.package_dimensions.width_cm,
+            "height": request.package_dimensions.height_cm,
+            "weight_unit": "kg",
+            "dimension_unit": "cm",
+            "description": "Package from store",
+            "value": 100.0,
+        }
+    });
+    
     match state.http_client
         .post(&rates_url)
-        .json(&request)
+        .json(&shipping_request)
         .send()
         .await
     {
         Ok(response) => {
             if response.status().is_success() {
                 match response.json::<serde_json::Value>().await {
-                    Ok(rates) => {
+                    Ok(shipping_response) => {
                         info!("✅ Shipping rates retrieved successfully");
-                        Ok(Json(rates))
+                        
+                        // Transform Ultra Shipping Service response to frontend format
+                        if let Some(quotes) = shipping_response.get("quotes").and_then(|q| q.as_array()) {
+                            let rates: Vec<serde_json::Value> = quotes.iter().map(|quote| {
+                                serde_json::json!({
+                                    "carrier": quote.get("provider").and_then(|p| p.as_str()).unwrap_or("Unknown"),
+                                    "service": quote.get("service").and_then(|s| s.as_str()).unwrap_or("Standard"),
+                                    "rate": quote.get("cost").and_then(|c| c.as_f64()).unwrap_or(0.0),
+                                    "currency": "USD",
+                                    "estimated_days": quote.get("delivery_days").and_then(|d| d.as_u64()).map(|d| d.to_string()).unwrap_or("5-7".to_string()),
+                                    "transit_time": quote.get("transit_time").and_then(|t| t.as_str()).unwrap_or(""),
+                                    "tracking_included": quote.get("tracking_included").and_then(|t| t.as_bool()).unwrap_or(false),
+                                })
+                            }).collect();
+                            
+                            Ok(Json(serde_json::json!({
+                                "rates": rates,
+                                "message": "Rates retrieved successfully"
+                            })))
+                        } else {
+                            // Return fallback if quotes not found in response
+                            Ok(Json(serde_json::json!({
+                                "rates": [{
+                                    "carrier": "Standard Shipping",
+                                    "service": "Ground",
+                                    "rate": 9.99,
+                                    "currency": "USD",
+                                    "estimated_days": "5-7",
+                                    "fallback": true
+                                }],
+                                "message": "Using fallback rates - invalid response format"
+                            })))
+                        }
                     }
                     Err(e) => {
                         error!("Failed to parse shipping rates response: {}", e);
@@ -2713,7 +2785,18 @@ async fn get_shipping_rates(
                 }
             } else {
                 warn!("Shipping service returned error: {}", response.status());
-                Err(StatusCode::BAD_GATEWAY)
+                // Return fallback for error responses
+                Ok(Json(serde_json::json!({
+                    "rates": [{
+                        "carrier": "Standard Shipping",
+                        "service": "Ground",
+                        "rate": 9.99,
+                        "currency": "USD",
+                        "estimated_days": "5-7",
+                        "fallback": true
+                    }],
+                    "message": "Using fallback rates - shipping service error"
+                })))
             }
         }
         Err(e) => {

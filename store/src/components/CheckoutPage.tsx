@@ -264,14 +264,21 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          from_address: {
+            name: "Store Warehouse",
+            street1: "123 Commerce St",
+            city: "New York",
+            state: "NY",
+            zip: "10001",
+            country: "US",
+          },
           destination_address: {
             name: `${shippingInfo.firstName} ${shippingInfo.lastName}`,
             street1: shippingInfo.address,
-            street2: null,
             city: shippingInfo.city,
             state: shippingInfo.state,
             zip: shippingInfo.zipCode,
-            country: shippingInfo.country
+            country: shippingInfo.country || "US",
           },
           package_weight_kg: packageWeight,
           package_dimensions: {
