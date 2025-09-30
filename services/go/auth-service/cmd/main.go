@@ -6,6 +6,7 @@ import (
         "os"
         "os/signal"
         "syscall"
+        "time"
 
         "auth-service/internal/app"
         "auth-service/internal/config"
@@ -65,7 +66,7 @@ func main() {
         // Log service startup event
         startupEvent := &audit.AuditEvent{
                 ID:         "auth-service-startup-" + os.Getenv("HOSTNAME"),
-                Timestamp:  logger.Now(),
+                Timestamp:  time.Now(),
                 EventType:  "service.startup",
                 ActorID:    "system",
                 ResourceID: "auth-service",
