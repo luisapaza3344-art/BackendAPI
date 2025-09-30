@@ -63,6 +63,16 @@ export default defineConfig({
           });
         },
       },
+      '/api/coinbase': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/coinbase/, '/v1/payments/coinbase'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('Coinbase proxy error:', err.message);
+          });
+        },
+      },
       '/api': {
         target: 'http://localhost:3000',
         changeOrigin: true,

@@ -356,6 +356,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/v1/payments/stripe/create-payment-intent", post(stripe::create_payment_intent))
         .route("/v1/payments/paypal", post(paypal::process_payment))
         .route("/v1/payments/coinbase", post(coinbase::process_payment))
+        .route("/v1/payments/coinbase/create-charge", post(coinbase::process_payment))
         .route("/v1/payments/:payment_id", get(payment::get_payment_status))
         .route("/v1/webhooks/stripe", post(stripe::handle_webhook))
         .route("/v1/webhooks/paypal", post(paypal::handle_webhook))
