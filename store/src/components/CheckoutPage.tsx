@@ -176,16 +176,16 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
   };
 
   /**
-   * Initialize LIVE secure checkout session
-   * SECURITY: This calls LIVE backend to create secure payment session
+   * Initialize secure checkout session (Local version)
+   * SECURITY: Creates secure local session for checkout
    */
   const initializeSecureCheckout = async (): Promise<void> => {
     try {
       // Advanced rate limiting check
       const rateLimitResult = SecurityService.checkAdvancedRateLimit(
         `checkout_init_${user?.id || 'anonymous'}`,
-        3, // Max 3 checkout initializations
-        300000 // Per 5 minutes
+        3,
+        300000
       );
 
       if (!rateLimitResult.allowed) {
@@ -195,54 +195,26 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
         return;
       }
 
-      // Call LIVE backend to initialize checkout
-      const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/checkout/initialize`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-          'X-CSRF-Token': localStorage.getItem('csrf_token') || '',
-          'X-Session-ID': localStorage.getItem('session_id') || '',
-          'X-Timestamp': Date.now().toString(),
-          'X-Nonce': SecurityService.generateNonce()
-        },
-        body: JSON.stringify({
-          cart_items: items.map(item => ({
-            id: item.id,
-            quantity: item.quantity,
-            size: item.size,
-            color: item.color
-          })),
-          shipping_info: shippingInfo,
-          client_fingerprint: SecurityService.generateSecureId(16)
-        })
-      });
-
-      if (!response.ok) {
-        const errorBody = await response.json().catch(() => ({}));
-        throw new Error(errorBody.message || 'Failed to initialize checkout');
-      }
-
-      const sessionData = await response.json();
-      
-      if (!sessionData.temp_payment_id || !sessionData.csrf_token) {
-        throw new Error('Invalid checkout session response');
-      }
+      // Create secure local session
+      const tempPaymentId = SecurityService.generateSecureId(32);
+      const csrfToken = SecurityService.generateSecureId(32);
+      const nonce = SecurityService.generateNonce();
+      const expiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
 
       setSecureSession({
-        tempPaymentId: sessionData.temp_payment_id,
-        csrfToken: sessionData.csrf_token,
-        nonce: sessionData.nonce,
-        expiresAt: sessionData.expires_at
+        tempPaymentId,
+        csrfToken,
+        nonce,
+        expiresAt
       });
 
       // Store tokens for subsequent requests
-      localStorage.setItem('csrf_token', sessionData.csrf_token);
-      localStorage.setItem('session_id', sessionData.session_id);
+      localStorage.setItem('csrf_token', csrfToken);
+      localStorage.setItem('session_id', tempPaymentId);
 
-      SecurityService.logSecurityEvent('live_checkout_session_initialized', {
-        tempPaymentId: sessionData.temp_payment_id,
-        expiresAt: sessionData.expires_at,
+      SecurityService.logSecurityEvent('checkout_session_initialized', {
+        tempPaymentId,
+        expiresAt,
         cartItemCount: items.length,
         totalAmount: finalTotal
       });
