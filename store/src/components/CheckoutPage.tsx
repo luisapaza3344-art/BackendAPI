@@ -1114,13 +1114,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                     <Elements stripe={stripePromise}>
                       <ApplePayButton
                         amount={finalTotal}
-                        onSuccess={(paymentIntent) => {
+                        onSuccess={() => {
                           setIsProcessing(false);
                           setOrderComplete(true);
                           clearCart();
                         }}
-                        onError={(error) => {
-                          setErrors({ general: error });
+                        onError={() => {
+                          setErrors({ general: 'Payment failed' });
                           setIsProcessing(false);
                         }}
                         disabled={isProcessing}
@@ -1132,13 +1132,13 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                     <Elements stripe={stripePromise}>
                       <GooglePayButton
                         amount={finalTotal}
-                        onSuccess={(paymentIntent) => {
+                        onSuccess={() => {
                           setIsProcessing(false);
                           setOrderComplete(true);
                           clearCart();
                         }}
-                        onError={(error) => {
-                          setErrors({ general: error });
+                        onError={() => {
+                          setErrors({ general: 'Payment failed' });
                           setIsProcessing(false);
                         }}
                         disabled={isProcessing}
