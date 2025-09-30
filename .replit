@@ -70,13 +70,12 @@ waitForPort = 8000
 name = "Auth Service"
 author = "agent"
 
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "cd services/go/auth-service && SERVER_PORT=8099 TLS_ENABLED=false go run cmd/main.go"
-waitForPort = 8099
-
 [workflows.workflow.metadata]
 outputType = "console"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "cd services/go/auth-service && FIPS_MODE=true HSM_AVAILABLE=true PQ_CRYPTO_ENABLED=true SERVER_PORT=8099 TLS_ENABLED=false go run cmd/main.go"
 
 [[workflows.workflow]]
 name = "Advanced Analytics"
@@ -184,10 +183,6 @@ externalPort = 4200
 [[ports]]
 localPort = 37431
 externalPort = 3000
-
-[[ports]]
-localPort = 43961
-externalPort = 8008
 
 [[ports]]
 localPort = 45345
