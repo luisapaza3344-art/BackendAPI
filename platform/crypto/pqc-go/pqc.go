@@ -6,8 +6,8 @@ import (
         "crypto/rand"
         "errors"
         "fmt"
+        "os"
 
-        oqs "github.com/open-quantum-safe/liboqs-go/oqs"
         "github.com/cloudflare/circl/kem/kyber/kyber1024"
         "github.com/cloudflare/circl/sign/dilithium/mode5"
         "golang.org/x/crypto/curve25519"
