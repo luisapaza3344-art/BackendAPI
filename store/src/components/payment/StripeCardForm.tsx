@@ -10,6 +10,7 @@ interface StripeCardFormProps {
   onSuccess: (paymentIntent: any) => void;
   onError: (error: string) => void;
   tempPaymentId: string;
+  amount: number; // Amount in dollars
   disabled?: boolean;
 }
 
@@ -27,6 +28,7 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
   onSuccess,
   onError,
   tempPaymentId,
+  amount,
   disabled = false
 }) => {
   const stripe = useStripe();
@@ -40,9 +42,12 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
    */
   useEffect(() => {
     const getClientSecret = async () => {
-      if (!tempPaymentId) return;
+      if (!tempPaymentId || !amount) return;
       
       try {
+        // Convert dollars to cents for Stripe
+        const amountInCents = Math.round(amount * 100);
+        
         // Call Payment Gateway to create payment intent
         const response = await fetch('/api/payments/stripe/create-payment-intent', {
           method: 'POST',
@@ -50,7 +55,7 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            amount: 1000, // TODO: Get from cart total
+            amount: amountInCents,
             currency: 'usd',
             temp_payment_id: tempPaymentId,
           }),
@@ -82,7 +87,7 @@ export const StripeCardForm: React.FC<StripeCardFormProps> = ({
     };
 
     getClientSecret();
-  }, [tempPaymentId, onError]);
+  }, [tempPaymentId, amount, onError]);
 
   /**
    * Handle secure card payment submission

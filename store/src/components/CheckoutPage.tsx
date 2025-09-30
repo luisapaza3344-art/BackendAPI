@@ -915,6 +915,7 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                       <Elements stripe={stripePromise}>
                         <StripeCardForm
                           tempPaymentId={secureSession.tempPaymentId}
+                          amount={finalTotal}
                           onSuccess={(paymentIntent) => {
                             SecurityService.logSecurityEvent('payment_completed', {
                               method: 'stripe',
