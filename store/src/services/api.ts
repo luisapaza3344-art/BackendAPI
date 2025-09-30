@@ -287,9 +287,39 @@ class ApiClient {
       });
     }
 
-    return this.request<{ products: ApiProduct[]; collections: ApiCollection[] }>(
+    const response = await this.request<{ products?: any[]; collections?: any[] }>(
       `/search?${searchParams.toString()}`
     );
+    
+    return {
+      products: (response.products || []).map((prod: any) => ({
+        id: prod.id,
+        name: prod.name,
+        price: prod.selling_price,
+        image: prod.images && prod.images[0] ? prod.images[0] : '/placeholder-product.jpg',
+        images: prod.images || [],
+        category: prod.category,
+        description: prod.short_description,
+        sizes: [],
+        colors: [],
+        inStock: prod.total_available > 0,
+        featured: prod.tags?.includes('featured'),
+        trending: prod.tags?.includes('trending'),
+        tags: prod.tags || [],
+        createdAt: prod.created_at,
+        updatedAt: prod.updated_at
+      })),
+      collections: (response.collections || []).map((col: any) => ({
+        id: col.id,
+        title: col.title,
+        subtitle: col.subtitle,
+        image: col.image_url,
+        category: col.collection_type,
+        featured: col.featured,
+        createdAt: col.created_at,
+        updatedAt: col.updated_at
+      }))
+    };
   }
 }
 
