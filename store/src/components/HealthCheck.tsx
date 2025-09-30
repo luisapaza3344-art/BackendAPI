@@ -20,39 +20,39 @@ const SERVICES = [
     enabled: true
   },
   {
+    name: 'Payment Gateway',
+    url: window.location.protocol + '//' + window.location.hostname + ':8080/health',
+    description: 'Quantum-resistant Payment Processing',
+    enabled: true
+  },
+  {
+    name: 'Security Service',
+    url: window.location.protocol + '//' + window.location.hostname + ':8000/health',
+    description: 'FIPS 140-3 Security & Audit Trail',
+    enabled: true
+  },
+  {
+    name: 'Ultra Shipping Service',
+    url: window.location.protocol + '//' + window.location.hostname + ':6800/health',
+    description: 'Ultra Shipping with AI Optimization',
+    enabled: true
+  },
+  {
+    name: 'Advanced Analytics',
+    url: window.location.protocol + '//' + window.location.hostname + '/health',
+    description: 'AI/ML Analytics & Fraud Detection',
+    enabled: true
+  },
+  {
     name: 'API Gateway',
     url: '',
     description: 'Enterprise API Gateway (Not Running)',
     enabled: false
   },
   {
-    name: 'Payment Gateway',
-    url: '',
-    description: 'Quantum-resistant Payment Processing (Not Running)',
-    enabled: false
-  },
-  {
-    name: 'Ultra Shipping',
-    url: '',
-    description: 'Ultra Shipping Service with AI Optimization (Not Running)',
-    enabled: false
-  },
-  {
     name: 'Auth Service',
     url: '',
     description: 'WebAuthn & DID Authentication (Not Running)',
-    enabled: false
-  },
-  {
-    name: 'Advanced Analytics',
-    url: '',
-    description: 'AI/ML Analytics & Fraud Detection (Not Running)',
-    enabled: false
-  },
-  {
-    name: 'Security Service',
-    url: '',
-    description: 'FIPS 140-3 Security & Audit Trail (Not Running)',
     enabled: false
   }
 ];
