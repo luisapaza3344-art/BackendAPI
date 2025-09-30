@@ -89,6 +89,7 @@ export default defineConfig({
       "X-Frame-Options": "SAMEORIGIN",
       "X-XSS-Protection": "1; mode=block",
       "Referrer-Policy": "strict-origin-when-cross-origin",
+      "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.paypal.com https://*.paypal.com https://js.stripe.com https://*.stripe.com; connect-src 'self' https://www.paypal.com https://*.paypal.com https://api.stripe.com https://api.coinbase.com https://*.replit.dev http://localhost:* ws://localhost:* wss://*; frame-src https://www.paypal.com https://*.paypal.com https://js.stripe.com https://*.stripe.com https://commerce.coinbase.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:;",
     },
   },
   define: {
