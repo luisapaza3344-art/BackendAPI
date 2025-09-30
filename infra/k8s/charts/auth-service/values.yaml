@@ -1,0 +1,163 @@
+replicaCount: 3
+
+image:
+  repository: ghcr.io/payment-platform/auth-service
+  pullPolicy: IfNotPresent
+  tag: "2.0.0-government-grade"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: "auth-service"
+
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8099"
+  prometheus.io/path: "/metrics"
+  co.elastic.logs/enabled: "true"
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+    - ALL
+  readOnlyRootFilesystem: true
+
+service:
+  type: ClusterIP
+  port: 8099
+  targetPort: 8099
+  annotations: {}
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+  hosts:
+    - host: auth.payment-platform.gov
+      paths:
+        - path: /
+          pathType: Prefix
+  tls:
+    - secretName: auth-service-tls
+      hosts:
+        - auth.payment-platform.gov
+
+resources:
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+  requests:
+    cpu: 500m
+    memory: 1Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+nodeSelector: {}
+
+tolerations: []
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - auth-service
+        topologyKey: kubernetes.io/hostname
+
+env:
+  FIPS_MODE: "true"
+  HSM_AVAILABLE: "true"
+  PQ_CRYPTO_ENABLED: "true"
+  FIPS_LEVEL: "140-3_Level_3"
+  SERVER_PORT: "8099"
+  TLS_ENABLED: "true"
+  DID_ENABLED: "true"
+  WEBAUTHN_ENABLED: "true"
+  LOG_LEVEL: "info"
+  OTEL_ENABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+
+envSecrets:
+  DATABASE_URL: 
+    secretName: database-credentials
+    key: connection_url
+  JWT_SECRET:
+    secretName: auth-secrets
+    key: jwt_secret
+  SESSION_SECRET:
+    secretName: auth-secrets
+    key: session_secret
+
+healthcheck:
+  liveness:
+    path: /health
+    port: 8099
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readiness:
+    path: /ready
+    port: 8099
+    initialDelaySeconds: 10
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+      - namespaceSelector:
+          matchLabels:
+            name: ingress-nginx
+      ports:
+      - protocol: TCP
+        port: 8099
+  egress:
+    - to:
+      - namespaceSelector:
+          matchLabels:
+            name: database
+      ports:
+      - protocol: TCP
+        port: 5432
+    - to:
+      - podSelector:
+          matchLabels:
+            app: otel-collector
+      ports:
+      - protocol: TCP
+        port: 4318
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 2

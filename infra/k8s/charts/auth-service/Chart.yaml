@@ -1,0 +1,20 @@
+apiVersion: v2
+name: auth-service
+description: Government-Grade Authentication Service with DID/VC + WebAuthn/Passkeys
+type: application
+version: 2.0.0
+appVersion: "2.0.0-government-grade"
+keywords:
+  - authentication
+  - webauthn
+  - passkeys
+  - did
+  - verifiable-credentials
+  - fips-140-3
+  - post-quantum-cryptography
+maintainers:
+  - name: Security Team
+    email: security@payment-platform.gov
+home: https://github.com/payment-platform/auth-service
+sources:
+  - https://github.com/payment-platform/auth-service

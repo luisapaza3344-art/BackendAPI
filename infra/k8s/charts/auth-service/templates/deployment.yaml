@@ -1,0 +1,96 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "auth-service.fullname" . }}
+  labels:
+    {{- include "auth-service.labels" . | nindent 4 }}
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: payment-platform
+    compliance.payment-platform.gov/fips: "140-3-level-3"
+    compliance.payment-platform.gov/pci-dss: "level-1"
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "auth-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "auth-service.selectorLabels" . | nindent 8 }}
+        compliance.payment-platform.gov/fips: "140-3-level-3"
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "auth-service.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+        imagePullPolicy: {{ .Values.image.pullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.service.targetPort }}
+          protocol: TCP
+        env:
+        {{- range $key, $value := .Values.env }}
+        - name: {{ $key }}
+          value: {{ $value | quote }}
+        {{- end }}
+        {{- range $key, $secret := .Values.envSecrets }}
+        - name: {{ $key }}
+          valueFrom:
+            secretKeyRef:
+              name: {{ $secret.secretName }}
+              key: {{ $secret.key }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: {{ .Values.healthcheck.liveness.path }}
+            port: {{ .Values.healthcheck.liveness.port }}
+          initialDelaySeconds: {{ .Values.healthcheck.liveness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthcheck.liveness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthcheck.liveness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthcheck.liveness.failureThreshold }}
+        readinessProbe:
+          httpGet:
+            path: {{ .Values.healthcheck.readiness.path }}
+            port: {{ .Values.healthcheck.readiness.port }}
+          initialDelaySeconds: {{ .Values.healthcheck.readiness.initialDelaySeconds }}
+          periodSeconds: {{ .Values.healthcheck.readiness.periodSeconds }}
+          timeoutSeconds: {{ .Values.healthcheck.readiness.timeoutSeconds }}
+          failureThreshold: {{ .Values.healthcheck.readiness.failureThreshold }}
+        resources:
+          {{- toYaml .Values.resources | nindent 12 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/.cache
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir: {}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

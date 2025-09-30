@@ -1,0 +1,63 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: auth-service
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+    compliance.payment-platform.gov/fips: "140-3-level-3"
+    compliance.payment-platform.gov/pci-dss: "level-1"
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/component: authentication
+    app.kubernetes.io/part-of: payment-platform
+spec:
+  project: payment-platform
+  
+  source:
+    repoURL: https://github.com/payment-platform/deployment
+    targetRevision: main
+    path: infra/k8s/charts/auth-service
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-production.yaml
+      parameters:
+        - name: image.tag
+          value: "2.0.0-government-grade"
+        - name: replicaCount
+          value: "3"
+  
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: auth-service
+  
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  
+  revisionHistoryLimit: 10
+  
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+      jsonPointers:
+        - /spec/minReplicas
+        - /spec/maxReplicas

@@ -1,0 +1,137 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: payment-platform-services
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: payment-platform
+    compliance.payment-platform.gov/monitoring: "enabled"
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: payment-platform
+  namespaceSelector:
+    matchNames:
+      - auth-service
+      - api-gateway
+      - payment-gateway
+      - security-service
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      scheme: http
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_pod_name]
+          targetLabel: pod
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: kubernetes_namespace
+        - sourceLabels: [__meta_kubernetes_pod_label_app_kubernetes_io_name]
+          targetLabel: service
+        - sourceLabels: [__meta_kubernetes_pod_label_compliance_payment_platform_gov_fips]
+          targetLabel: fips_level
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: payment-platform-alerts
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: payment-platform
+    compliance.payment-platform.gov/alerting: "enabled"
+spec:
+  groups:
+    - name: payment-platform-slos
+      interval: 30s
+      rules:
+        - alert: HighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{status=~"5.."}[5m])) by (service)
+              /
+              sum(rate(http_requests_total[5m])) by (service)
+            ) > 0.01
+          for: 5m
+          labels:
+            severity: critical
+            compliance: pci-dss
+          annotations:
+            summary: "High error rate detected for {{ $labels.service }}"
+            description: "Service {{ $labels.service }} has error rate above 1% (current: {{ $value | humanizePercentage }})"
+        
+        - alert: ServiceDown
+          expr: up{job=~"auth-service|api-gateway|payment-gateway|security-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            compliance: pci-dss
+          annotations:
+            summary: "Service {{ $labels.job }} is down"
+            description: "Critical service {{ $labels.job }} has been down for more than 1 minute"
+        
+        - alert: HighLatency
+          expr: |
+            histogram_quantile(0.99, 
+              sum(rate(http_request_duration_seconds_bucket[5m])) by (service, le)
+            ) > 1
+          for: 10m
+          labels:
+            severity: warning
+            compliance: soc2
+          annotations:
+            summary: "High latency detected for {{ $labels.service }}"
+            description: "P99 latency for {{ $labels.service }} is above 1s (current: {{ $value | humanizeDuration }})"
+        
+        - alert: FIPSModeDisabled
+          expr: fips_mode_enabled{job=~"auth-service|api-gateway|payment-gateway|security-service"} == 0
+          for: 1m
+          labels:
+            severity: critical
+            compliance: fips-140-3
+          annotations:
+            summary: "FIPS mode disabled on {{ $labels.job }}"
+            description: "Critical: FIPS 140-3 mode has been disabled on {{ $labels.job }}"
+        
+        - alert: HSMUnavailable
+          expr: hsm_available{job=~"auth-service|api-gateway|payment-gateway|security-service"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            compliance: fips-140-3
+          annotations:
+            summary: "HSM unavailable for {{ $labels.job }}"
+            description: "Hardware Security Module is unavailable for {{ $labels.job }}"
+        
+        - alert: AuditLogIntegrityFailure
+          expr: audit_trail_integrity_check_failures_total > 0
+          for: 1m
+          labels:
+            severity: critical
+            compliance: pci-dss
+          annotations:
+            summary: "Audit log integrity check failed"
+            description: "Blockchain-anchored audit trail integrity verification has failed"
+        
+        - alert: HighMemoryUsage
+          expr: |
+            (
+              container_memory_working_set_bytes{pod=~"auth-service-.*|api-gateway-.*|payment-gateway-.*|security-service-.*"}
+              /
+              container_spec_memory_limit_bytes{pod=~"auth-service-.*|api-gateway-.*|payment-gateway-.*|security-service-.*"}
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "High memory usage for {{ $labels.pod }}"
+            description: "Pod {{ $labels.pod }} is using more than 85% of its memory limit"
+        
+        - alert: PodCrashLooping
+          expr: rate(kube_pod_container_status_restarts_total[15m]) > 0
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "Pod {{ $labels.pod }} is crash looping"
+            description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 15 minutes"
