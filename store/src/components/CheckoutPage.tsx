@@ -16,7 +16,6 @@ import {
 } from '@/utils/validators';
 import { SecurityService } from '../services/cryptoService';
 import { createBackendApiService } from '../services/backendApiService';
-import { PayPalScriptProvider, PayPalButtons } from '@paypal/react-paypal-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { StripeCardForm } from './payment/StripeCardForm';
 import { ApplePayButton } from './payment/ApplePayButton';
@@ -945,33 +944,28 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                       <div className="text-center mb-4">
                         <DollarSign className="w-12 h-12 text-blue-600 dark:text-blue-400 mx-auto mb-4" />
                         <h3 className="text-lg font-medium text-blue-900 dark:text-blue-100 mb-2">PayPal</h3>
-                        <p className="text-blue-700 dark:text-blue-300 font-light">
+                        <p className="text-blue-700 dark:text-blue-300 font-light mb-4">
                           Complete your payment securely with PayPal
                         </p>
                       </div>
                       
-                      <PayPalScriptProvider 
-                        options={{
-                          clientId: import.meta.env.VITE_PAYPAL_CLIENT_ID || "AQkquBDf1zctJOWGKWUEtKXm6qVhueUEMvXO_-MCI4DQtszkZ8IHjVWnHzgdEOXhkTRBL_PmFh9LFNyE",
-                          currency: "USD",
-                          intent: "capture",
-                          components: "buttons,funding-eligibility",
-                          "enable-funding": "venmo,paylater",
-                          "disable-funding": "credit,card",
-                          "data-partner-attribution-id": "MinimalGallery_SP_PPCP"
-                        }}
-                      >
-                        <PayPalButtons
-                          style={{ 
-                            layout: "vertical",
-                            color: "blue",
-                            shape: "rect",
-                            label: "paypal",
-                            height: 48
-                          }}
-                          createOrder={async (data, actions) => {
+                      <div className="space-y-4">
+                        <div className="bg-white dark:bg-gray-800 p-4 rounded border">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="text-sm font-medium">Total Amount:</span>
+                            <span className="text-lg font-bold">${finalTotal.toFixed(2)} USD</span>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            You will be redirected to PayPal to complete your payment
+                          </p>
+                        </div>
+                        
+                        <Button
+                          type="button"
+                          onClick={async () => {
                             try {
-                              // Call backend to create PayPal order with REAL amounts
+                              setIsProcessing(true);
+                              
                               const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/paypal/create-order`, {
                                 method: 'POST',
                                 headers: {
@@ -989,51 +983,44 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
                               });
 
                               if (!response.ok) {
-                                throw new Error('Failed to create PayPal order');
+                                const errorData = await response.json();
+                                throw new Error(errorData.message || 'Failed to create PayPal order');
                               }
 
                               const orderData = await response.json();
-                              return orderData.paypal_order_id;
-                            } catch (error) {
-                              console.error('PayPal order creation error:', error);
-                              throw error;
-                            }
-                          }}
-                          onApprove={async (data, actions) => {
-                            try {
-                              setIsProcessing(true);
                               
-                              // Call backend to capture PayPal payment
-                              const response = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/paypal/capture-order`, {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  'Authorization': `Bearer ${localStorage.getItem('auth_token')}`,
-                                  'X-CSRF-Token': localStorage.getItem('csrf_token') || ''
-                                },
-                                body: JSON.stringify({
-                                  order_id: data.orderID,
-                                  temp_payment_id: secureSession?.tempPaymentId
-                                })
+                              SecurityService.logSecurityEvent('paypal_redirect_initiated', {
+                                orderId: orderData.paypal_order_id,
+                                tempPaymentId: secureSession?.tempPaymentId
                               });
-
-                              if (!response.ok) {
-                                throw new Error('Failed to capture PayPal payment');
+                              
+                              // Redirect to PayPal approval URL
+                              if (orderData.approval_url) {
+                                window.location.href = orderData.approval_url;
+                              } else {
+                                throw new Error('No approval URL received from PayPal');
                               }
-
-                              const result = await response.json();
-                              handlePayPalSuccess(result);
-                            } catch (error) {
-                              handlePayPalError(error);
+                            } catch (error: any) {
+                              setErrors({ general: error.message || 'Failed to initiate PayPal payment' });
+                              setIsProcessing(false);
                             }
                           }}
-                          onError={handlePayPalError}
-                          onCancel={() => {
-                            setErrors({ general: 'PayPal payment was cancelled' });
-                            setIsProcessing(false);
-                          }}
-                        />
-                      </PayPalScriptProvider>
+                          disabled={isProcessing || !secureSession?.tempPaymentId}
+                          className="w-full bg-[#0070ba] hover:bg-[#005ea6] text-white font-medium py-3 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          {isProcessing ? (
+                            <>
+                              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                              <span>Redirecting to PayPal...</span>
+                            </>
+                          ) : (
+                            <>
+                              <DollarSign className="w-5 h-5" />
+                              <span>Pay with PayPal</span>
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </TabsContent>
 
