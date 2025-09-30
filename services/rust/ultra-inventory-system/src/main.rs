@@ -15,7 +15,7 @@ use tracing::{info, error, warn};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use rust_decimal::Decimal;
-use rust_decimal::prelude::FromPrimitive;
+use rust_decimal::prelude::{FromPrimitive, ToPrimitive};
 
 // ===============================================================================
 // 🏆 ULTRA PROFESSIONAL INVENTORY SYSTEM
@@ -2459,6 +2459,241 @@ fn is_international_shipment(origin_country: &str, destination_country: &str) ->
 
 // Calcular ahorros por consolidación
 
+// ========================================================================
+// 🔐 ADMIN ENDPOINTS - PRIVATE ACCESS ONLY
+// ========================================================================
+
+// 💰 Update product cost price (admin only)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateCostPriceRequest {
+    pub cost_price: Decimal,
+}
+
+async fn update_product_cost_price(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<Uuid>,
+    Json(request): Json<UpdateCostPriceRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("💰 [ADMIN] Updating cost price for product: {}", id);
+    
+    // Update cost_price in database
+    let result = sqlx::query!(
+        "UPDATE products SET cost_price = $1, updated_at = $2 WHERE id = $3",
+        request.cost_price,
+        Utc::now(),
+        id
+    )
+    .execute(&state.db_pool)
+    .await;
+    
+    match result {
+        Ok(_) => {
+            info!("✅ Cost price updated successfully for product {}", id);
+            Ok(Json(serde_json::json!({
+                "success": true,
+                "product_id": id,
+                "cost_price": request.cost_price,
+                "updated_at": Utc::now()
+            })))
+        }
+        Err(e) => {
+            error!("❌ Failed to update cost price: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
+        }
+    }
+}
+
+// 📊 Get admin statistics with profit calculations (admin only)
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AdminStatsResponse {
+    pub total_revenue: Decimal,
+    pub total_cost: Decimal,
+    pub total_profit: Decimal,
+    pub profit_margin_percent: f64,
+    pub total_products: i64,
+    pub products_with_stock: i64,
+    pub top_profitable_products: Vec<ProductProfitInfo>,
+    pub timestamp: DateTime<Utc>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ProductProfitInfo {
+    pub id: Uuid,
+    pub name: String,
+    pub sku: String,
+    pub cost_price: Decimal,
+    pub selling_price: Decimal,
+    pub profit: Decimal,
+    pub profit_margin_percent: f64,
+    pub total_stock: i64,
+}
+
+async fn get_admin_stats(
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<AdminStatsResponse>, StatusCode> {
+    info!("📊 [ADMIN] Fetching profit statistics");
+    
+    // Get aggregated statistics
+    let stats = sqlx::query!(
+        r#"
+        SELECT 
+            COUNT(*) as total_products,
+            COALESCE(SUM(cost_price), 0) as total_cost,
+            COALESCE(SUM(selling_price), 0) as total_revenue
+        FROM products
+        WHERE status = 'Active'
+        "#
+    )
+    .fetch_one(&state.db_pool)
+    .await;
+    
+    let (total_products, total_cost, total_revenue) = match stats {
+        Ok(row) => (
+            row.total_products.unwrap_or(0),
+            row.total_cost.unwrap_or(Decimal::ZERO),
+            row.total_revenue.unwrap_or(Decimal::ZERO),
+        ),
+        Err(e) => {
+            error!("Failed to fetch stats: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    
+    let total_profit = total_revenue - total_cost;
+    let profit_margin = if total_revenue > Decimal::ZERO {
+        ((total_profit / total_revenue) * Decimal::from(100))
+            .to_f64()
+            .unwrap_or(0.0)
+    } else {
+        0.0
+    };
+    
+    // Get top profitable products
+    let top_products = sqlx::query!(
+        r#"
+        SELECT 
+            p.id, p.name, p.sku, p.cost_price, p.selling_price,
+            COALESCE(SUM(il.quantity_available), 0) as total_stock
+        FROM products p
+        LEFT JOIN inventory_levels il ON p.id = il.product_id
+        WHERE p.status = 'Active' AND p.selling_price > p.cost_price
+        GROUP BY p.id, p.name, p.sku, p.cost_price, p.selling_price
+        ORDER BY (p.selling_price - p.cost_price) DESC
+        LIMIT 10
+        "#
+    )
+    .fetch_all(&state.db_pool)
+    .await
+    .unwrap_or_default();
+    
+    let top_profitable_products: Vec<ProductProfitInfo> = top_products
+        .into_iter()
+        .map(|row| {
+            let profit = row.selling_price - row.cost_price;
+            let margin = if row.selling_price > Decimal::ZERO {
+                ((profit / row.selling_price) * Decimal::from(100))
+                    .to_f64()
+                    .unwrap_or(0.0)
+            } else {
+                0.0
+            };
+            
+            ProductProfitInfo {
+                id: row.id,
+                name: row.name,
+                sku: row.sku,
+                cost_price: row.cost_price,
+                selling_price: row.selling_price,
+                profit,
+                profit_margin_percent: margin,
+                total_stock: row.total_stock.unwrap_or(0),
+            }
+        })
+        .collect();
+    
+    let response = AdminStatsResponse {
+        total_revenue,
+        total_cost,
+        total_profit,
+        profit_margin_percent: profit_margin,
+        total_products,
+        products_with_stock: top_profitable_products.len() as i64,
+        top_profitable_products,
+        timestamp: Utc::now(),
+    };
+    
+    Ok(Json(response))
+}
+
+// 📦 Get shipping rates from Ultra Shipping Service
+// Note: ShippingAddress already defined at line 2333
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ShippingRateRequest {
+    pub destination_address: ShippingAddress,
+    pub package_weight_kg: Decimal,
+    pub package_dimensions: PackageDimensions,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct PackageDimensions {
+    pub length_cm: Decimal,
+    pub width_cm: Decimal,
+    pub height_cm: Decimal,
+}
+
+async fn get_shipping_rates(
+    State(state): State<Arc<AppState>>,
+    Json(request): Json<ShippingRateRequest>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    info!("📦 Calculating shipping rates via Ultra Shipping Service");
+    
+    // Call Ultra Shipping Service
+    let shipping_service_url = env::var("SHIPPING_SERVICE_URL")
+        .unwrap_or_else(|_| "http://localhost:6800".to_string());
+    
+    let rates_url = format!("{}/rates", shipping_service_url);
+    
+    match state.http_client
+        .post(&rates_url)
+        .json(&request)
+        .send()
+        .await
+    {
+        Ok(response) => {
+            if response.status().is_success() {
+                match response.json::<serde_json::Value>().await {
+                    Ok(rates) => {
+                        info!("✅ Shipping rates retrieved successfully");
+                        Ok(Json(rates))
+                    }
+                    Err(e) => {
+                        error!("Failed to parse shipping rates response: {}", e);
+                        Err(StatusCode::INTERNAL_SERVER_ERROR)
+                    }
+                }
+            } else {
+                warn!("Shipping service returned error: {}", response.status());
+                Err(StatusCode::BAD_GATEWAY)
+            }
+        }
+        Err(e) => {
+            error!("Failed to connect to shipping service: {}", e);
+            // Return fallback flat rate if service unavailable
+            Ok(Json(serde_json::json!({
+                "rates": [{
+                    "carrier": "Standard Shipping",
+                    "service": "Ground",
+                    "rate": 9.99,
+                    "currency": "USD",
+                    "estimated_days": "5-7",
+                    "fallback": true
+                }],
+                "message": "Using fallback rates - shipping service unavailable"
+            })))
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     // Initialize logging
@@ -2543,6 +2778,11 @@ async fn main() -> anyhow::Result<()> {
         
         // 🚀 SHIPPING INTEGRATION
         .route("/shipping/info", get(get_shipping_service_info))
+        .route("/shipping/rates", post(get_shipping_rates))
+        
+        // 🔐 ADMIN-ONLY ENDPOINTS (TODO: Add authentication middleware)
+        .route("/admin/products/:id/cost-price", put(update_product_cost_price))
+        .route("/admin/stats", get(get_admin_stats))
         
         .layer(CorsLayer::permissive())
         .with_state(state);
