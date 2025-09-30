@@ -1,6 +1,6 @@
 module platform/crypto/pqc-go
 
-go 1.21
+go 1.19
 
 require (
 	github.com/open-quantum-safe/liboqs-go v0.9.1

@@ -1,10 +1,10 @@
 // API Configuration and Services - Ultra Professional Backend Integration
-// Route all API calls through the Enterprise API Gateway (port 9000) via /api prefix
+// Connect directly to Ultra Inventory System (port 3000) via /api prefix through Vite proxy
 const API_BASE_URL = (() => {
-  const baseUrl = import.meta.env.VITE_API_GATEWAY_URL;
-  if (!baseUrl) {
-    console.error('❌ VITE_API_GATEWAY_URL environment variable is required for API calls');
-    throw new Error('API Gateway URL is required for backend communication');
+  // Use relative path for Vite proxy to work correctly
+  const baseUrl = import.meta.env.VITE_API_GATEWAY_URL || '';
+  if (baseUrl === '' || !baseUrl) {
+    return '/api';
   }
   // Ensure /api suffix for proper routing
   return baseUrl.endsWith('/api') ? baseUrl : `${baseUrl}/api`;
@@ -155,11 +155,31 @@ class ApiClient {
 
   // Collections API
   async getCollections(): Promise<ApiCollection[]> {
-    return this.request<ApiCollection[]>('/collections');
+    const response = await this.request<{ collections: any[] }>('/collections');
+    return response.collections.map((col: any) => ({
+      id: col.id,
+      title: col.title,
+      subtitle: col.subtitle,
+      image: col.image_url,
+      category: col.collection_type,
+      featured: col.featured,
+      createdAt: col.created_at,
+      updatedAt: col.updated_at
+    }));
   }
 
   async getCollection(id: string): Promise<ApiCollection> {
-    return this.request<ApiCollection>(`/collections/${id}`);
+    const response = await this.request<any>(`/collections/${id}`);
+    return {
+      id: response.id,
+      title: response.title,
+      subtitle: response.subtitle,
+      image: response.image_url,
+      category: response.collection_type,
+      featured: response.featured,
+      createdAt: response.created_at,
+      updatedAt: response.updated_at
+    };
   }
 
   // Products API
@@ -182,20 +202,73 @@ class ApiClient {
     }
 
     const endpoint = `/products${searchParams.toString() ? `?${searchParams.toString()}` : ''}`;
-    return this.request<{ products: ApiProduct[]; total: number }>(endpoint);
+    const response = await this.request<{ products: any[]; total_count: number }>(endpoint);
+    return {
+      products: response.products.map((prod: any) => ({
+        id: prod.id,
+        name: prod.name,
+        price: prod.selling_price,
+        image: prod.images && prod.images[0] ? prod.images[0] : '/placeholder-product.jpg',
+        images: prod.images || [],
+        category: prod.category,
+        description: prod.short_description,
+        sizes: [],
+        colors: [],
+        inStock: prod.total_available > 0,
+        featured: prod.tags?.includes('featured'),
+        trending: prod.tags?.includes('trending'),
+        tags: prod.tags || [],
+        createdAt: prod.created_at,
+        updatedAt: prod.updated_at
+      })),
+      total: response.total_count
+    };
   }
 
   async getProduct(id: string): Promise<ApiProduct> {
-    return this.request<ApiProduct>(`/products/${id}`);
+    const response = await this.request<any>(`/products/${id}`);
+    return {
+      id: response.id,
+      name: response.name,
+      price: response.selling_price,
+      image: response.images && response.images[0] ? response.images[0] : '/placeholder-product.jpg',
+      images: response.images || [],
+      category: response.category,
+      description: response.short_description,
+      sizes: [],
+      colors: [],
+      inStock: response.total_available > 0,
+      featured: response.tags?.includes('featured'),
+      trending: response.tags?.includes('trending'),
+      tags: response.tags || [],
+      createdAt: response.created_at,
+      updatedAt: response.updated_at
+    };
   }
 
   // Categories API
   async getCategories(): Promise<ApiCategory[]> {
-    return this.request<ApiCategory[]>('/categories');
+    const response = await this.request<{ categories: any[] }>('/categories');
+    return response.categories.map((cat: any) => ({
+      id: cat.id,
+      name: cat.name,
+      displayName: cat.display_name,
+      image: cat.image_url,
+      description: cat.description,
+      productCount: cat.product_count
+    }));
   }
 
   async getCategory(id: string): Promise<ApiCategory> {
-    return this.request<ApiCategory>(`/categories/${id}`);
+    const response = await this.request<any>(`/categories/${id}`);
+    return {
+      id: response.id,
+      name: response.name,
+      displayName: response.display_name,
+      image: response.image_url,
+      description: response.description,
+      productCount: response.product_count
+    };
   }
 
   // Search API

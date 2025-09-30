@@ -49,16 +49,30 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: [
-      "85a7dab0-f42c-425c-b5f9-606630150d16-00-3lj5tee1xmhhc.janeway.replit.dev",
-      // you can also add a wildcard if replit keeps changing the host:
-      // "*.replit.dev"
-    ],
-    port: 5173,
-    host: true,
+    allowedHosts: true,
+    port: 5000,
+    host: "0.0.0.0",
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api/, ''),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.log('proxy error', err);
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            console.log('Sending Request to the Target:', req.method, req.url);
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            console.log('Received Response from the Target:', proxyRes.statusCode, req.url);
+          });
+        },
+      },
+    },
     headers: {
       "X-Content-Type-Options": "nosniff",
-      "X-Frame-Options": "SAMEORIGIN", // Allow frames for Stripe
+      "X-Frame-Options": "SAMEORIGIN",
       "X-XSS-Protection": "1; mode=block",
       "Referrer-Policy": "strict-origin-when-cross-origin",
     },
