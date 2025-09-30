@@ -3,7 +3,7 @@ use axum::{
     http::StatusCode,
     response::Json,
 };
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use tracing::{info, error};
 use crate::AppState;
 use crate::models::payment_request::PaymentStatus;
@@ -63,6 +63,58 @@ pub async fn get_payment_status(
         Err(e) => {
             error!("❌ Failed to get payment status: {}", e);
             Err(StatusCode::NOT_FOUND)
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct InitCheckoutRequest {
+    pub temp_payment_id: String,
+    pub cart_items: serde_json::Value,
+    pub subtotal: f64,
+    pub shipping: f64,
+    pub tax: f64,
+    pub total: f64,
+    pub currency: String,
+    pub customer_email: String,
+    pub shipping_address: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct InitCheckoutResponse {
+    pub success: bool,
+    pub temp_payment_id: String,
+}
+
+/// Initialize secure checkout session and save to database
+pub async fn init_checkout(
+    State(state): State<AppState>,
+    Json(payload): Json<InitCheckoutRequest>,
+) -> Result<Json<InitCheckoutResponse>, StatusCode> {
+    info!("🚀 Initializing checkout session: temp_payment_id={}", payload.temp_payment_id);
+
+    // Save to database
+    match state.payment_service.save_temp_payment(
+        &payload.temp_payment_id,
+        &payload.cart_items.to_string(),
+        payload.subtotal,
+        payload.shipping,
+        payload.tax,
+        payload.total,
+        &payload.currency,
+        &payload.customer_email,
+        &payload.shipping_address.to_string(),
+    ).await {
+        Ok(_) => {
+            info!("✅ Checkout session saved successfully: {}", payload.temp_payment_id);
+            Ok(Json(InitCheckoutResponse {
+                success: true,
+                temp_payment_id: payload.temp_payment_id,
+            }))
+        },
+        Err(e) => {
+            error!("❌ Failed to save checkout session: {}", e);
+            Err(StatusCode::INTERNAL_SERVER_ERROR)
         }
     }
 }

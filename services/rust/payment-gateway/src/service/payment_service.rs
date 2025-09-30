@@ -248,4 +248,38 @@ impl PaymentService {
         warn!("⚠️ Unknown webhook event ID format, using generic provider: {}", event_id);
         "webhook".to_string()
     }
+
+    /// Save temporary payment session to database
+    pub async fn save_temp_payment(
+        &self,
+        temp_payment_id: &str,
+        cart_items: &str,
+        subtotal: f64,
+        shipping: f64,
+        tax: f64,
+        total: f64,
+        currency: &str,
+        customer_email: &str,
+        shipping_address: &str,
+    ) -> Result<()> {
+        info!("💾 Saving temp payment session: {}", temp_payment_id);
+        
+        self.db.save_temp_payment(
+            temp_payment_id,
+            cart_items,
+            subtotal,
+            shipping,
+            tax,
+            total,
+            currency,
+            customer_email,
+            shipping_address,
+        ).await.map_err(|e| {
+            error!("Failed to save temp payment {}: {}", temp_payment_id, e);
+            e
+        })?;
+        
+        info!("✅ Temp payment session saved: {}", temp_payment_id);
+        Ok(())
+    }
 }

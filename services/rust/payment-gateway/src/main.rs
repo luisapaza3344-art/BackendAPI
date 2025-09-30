@@ -352,6 +352,7 @@ async fn main() -> anyhow::Result<()> {
     let app = Router::new()
         .route("/health", get(health_check))
         .route("/health/detailed", get(detailed_health_check))
+        .route("/v1/payments/init-checkout", post(payment::init_checkout))
         .route("/v1/payments/stripe", post(stripe::process_payment))
         .route("/v1/payments/stripe/create-payment-intent", post(stripe::create_payment_intent))
         .route("/v1/payments/paypal", post(paypal::process_payment))

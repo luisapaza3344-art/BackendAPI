@@ -350,4 +350,48 @@ impl DatabaseRepository {
         
         Ok(())
     }
+
+    /// Save temporary payment session to database
+    pub async fn save_temp_payment(
+        &self,
+        temp_payment_id: &str,
+        cart_items: &str,
+        subtotal: f64,
+        shipping: f64,
+        tax: f64,
+        total: f64,
+        currency: &str,
+        customer_email: &str,
+        shipping_address: &str,
+    ) -> Result<()> {
+        let query = r#"
+            INSERT INTO temp_payments (
+                temp_payment_id, cart_items, subtotal, shipping, tax, 
+                total_amount, currency, customer_email, shipping_address, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        "#;
+
+        // Convert floats to cents (integers)
+        let subtotal_cents = (subtotal * 100.0) as i64;
+        let shipping_cents = (shipping * 100.0) as i64;
+        let tax_cents = (tax * 100.0) as i64;
+        let total_cents = (total * 100.0) as i64;
+
+        sqlx::query(query)
+            .bind(temp_payment_id)
+            .bind(cart_items)
+            .bind(subtotal_cents)
+            .bind(shipping_cents)
+            .bind(tax_cents)
+            .bind(total_cents)
+            .bind(currency)
+            .bind(customer_email)
+            .bind(shipping_address)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| anyhow::anyhow!("Failed to save temp payment: {}", e))?;
+
+        info!("💾 Temp payment saved: {}", temp_payment_id);
+        Ok(())
+    }
 }

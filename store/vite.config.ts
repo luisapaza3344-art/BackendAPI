@@ -53,6 +53,16 @@ export default defineConfig({
     port: 5000,
     host: "0.0.0.0",
     proxy: {
+      '/api/payment-gateway/init-checkout': {
+        target: 'http://localhost:8080',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/payment-gateway\/init-checkout/, '/v1/payments/init-checkout'),
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            console.error('Init Checkout proxy error:', err.message);
+          });
+        },
+      },
       '/api/payments': {
         target: 'http://localhost:8080',
         changeOrigin: true,

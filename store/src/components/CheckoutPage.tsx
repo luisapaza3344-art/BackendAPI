@@ -214,6 +214,34 @@ export const CheckoutPage: React.FC<CheckoutPageProps> = ({ onBack }) => {
       const nonce = SecurityService.generateNonce();
       const expiresAt = Date.now() + (30 * 60 * 1000); // 30 minutes
 
+      // Save session to database
+      const sessionResponse = await fetch(`${import.meta.env.VITE_BACKEND_URL}/api/payment-gateway/init-checkout`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          temp_payment_id: tempPaymentId,
+          cart_items: items.map(item => ({
+            id: item.id,
+            name: item.name,
+            quantity: item.quantity,
+            price: item.price
+          })),
+          subtotal: totalPrice,
+          shipping: shippingCost,
+          tax: tax,
+          total: finalTotal,
+          currency: 'USD',
+          customer_email: shippingInfo.email || '',
+          shipping_address: shippingInfo
+        })
+      });
+
+      if (!sessionResponse.ok) {
+        throw new Error('Failed to initialize checkout session');
+      }
+
       setSecureSession({
         tempPaymentId,
         csrfToken,
